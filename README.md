@@ -2,22 +2,36 @@
 
 ###### **EN DESARROLLO**
 
-_Es un conjunto de herramientas en un solo lugar, simplemente para optimizar tiempo y no temer a los virus de las paginas Youtube -> MP3 o otras que se me vayan ocurriendo xd, podrás:_
+_Es un conjunto de herramientas en un solo lugar, simplemente para optimizar tiempo y no temer a los virus de las páginas YouTube -> MP3 o otras que se me vayan ocurriendo xd, podrás:_
 
 • 🎶 **Descargar música de alta calidad**: Descarga audio desde YouTube y otros servicios de streaming directamente a tu PC de forma segura y rápida.
 • **Más herramientas en desarrollo**: Continuamente agregamos nuevas funcionalidades para mejorar tu experiencia.
 
 ## Construido con 🛠️
 
-- [Node.js](https://nodejs.org/) - Entorno de ejecución para JavaScript
-- [HTML] - Estructura de la interfaz de usuario
-- [CSS] - Estilos y diseño responsivo
+### Backend
+- [NestJS](https://nestjs.com/) - Framework progresivo de Node.js
+- [TypeScript](https://www.typescriptlang.org/)
+
+### Frontend  
+- [React 19](https://react.dev/) 
+- [Vite](https://vitejs.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [TailwindCSS](https://tailwindcss.com/)
+
+### DevOps
+- [Docker](https://www.docker.com/)
+- [ESLint](https://www.docker.com/)
+- [Jest](https://jestjs.io/)
 
 ## Instalación 🔧
 
-### Instalación estándar
+### Prerrequisitos
+- [Node.js](https://nodejs.org/) (versión 18 o superior)
+- [npm](https://www.npmjs.com/) (incluido con Node.js)
+- [Git](https://git-scm.com/)
 
-Sigue estos pasos para instalar y ejecutar SiriusTools en tu sistema:
+### Instalación Estándar (Desarrollo)
 
 1. **Clona el repositorio**
    ```bash
@@ -25,15 +39,31 @@ Sigue estos pasos para instalar y ejecutar SiriusTools en tu sistema:
    cd SiriusTools
    ```
 
-2. **Instala las dependencias necesarias**
+2. **Instala las dependencias del proyecto completo**
    ```bash
    npm install
    ```
 
-3. **Inicia la aplicación**
+3. **Inicia el proyecto completo (Backend + Frontend)**
    ```bash
-   npm run start
+   npm run start:all
    ```
+
+4. **O inicia cada servicio por separado:**
+   
+   **Backend** (en una terminal):
+   ```bash
+   npm run start:backend
+   ```
+   
+   **Frontend** (en otra terminal):
+   ```bash
+   npm run start:frontend
+   ```
+
+5. **Accede a la aplicación**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3000
 
 ### Instalación con Docker 🐳
 
@@ -44,38 +74,71 @@ Para usuarios que prefieren usar contenedores Docker:
    - [Docker Desktop](https://www.docker.com/products/docker-desktop) para Windows/Mac
    - [Docker Engine](https://docs.docker.com/engine/install/) para Linux
 
-2. **Construye la imagen Docker**
+2. **Clona el repositorio**
    ```bash
-   docker build -t sirius-tool .
+   git clone https://github.com/ViceAguilera/SiriusTools.git
+   cd SiriusTools
    ```
 
-3. **Ejecuta el contenedor**
-   ```bash
-   docker run -d --name sirius-tool-container --env-file .env sirius-tool
-   ```
-
-4. **Alternativa con Docker Compose**
-   
-   Para una gestión más sencilla, crea un archivo `docker-compose.yml`:
-   ```yaml
-   version: '3.8'
-   services:
-     sirius-tool:
-       build: .
-       container_name: sirius-tool
-       env_file:
-         - .env
-       restart: unless-stopped
-   ```
-   
-   Luego ejecuta:
+3. **Ejecuta con Docker Compose**
    ```bash
    docker-compose up -d
    ```
 
+4. **Accede a la aplicación**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3000
+
+5. **Para detener los contenedores**
+   ```bash
+   docker-compose down
+   ```
+
+### Scripts Disponibles
+
+```bash
+# Ejecutar ambos servicios simultáneamente
+npm run start:all
+
+# Ejecutar solo el backend
+npm run start:backend
+
+# Ejecutar solo el frontend  
+npm run start:frontend
+
+# Instalar dependencias en ambos proyectos
+npm install
+
+# Construir para producción (desde cada directorio)
+cd backend && npm run build
+cd frontend && npm run build
+
+# Ejecutar tests
+cd backend && npm run test
+```
+
+## Estructura del Proyecto 📁
+
+```
+SiriusTools/
+├── backend/                 # Servidor NestJS
+│   ├── src/                # Código fuente del backend
+│   ├── dist/               # Archivos compilados
+│   ├── test/               # Tests del backend
+│   ├── Dockerfile          # Configuración Docker del backend
+│   └── package.json        # Dependencias del backend
+├── frontend/               # Cliente React
+│   ├── src/                # Código fuente del frontend
+│   ├── public/             # Archivos estáticos
+│   ├── Dockerfile          # Configuración Docker del frontend
+│   └── package.json        # Dependencias del frontend
+├── docker-compose.yml      # Configuración de servicios Docker
+├── package.json            # Configuración del monorepo
+└── README.md              # Este archivo
+```
 ## Licencia 📄
 
-Este proyecto está bajo el _MIT_ - mira el archivo [LICENSE](LICENSE) para detalles
+Este proyecto está bajo la licencia _MIT_ - mira el archivo [LICENSE](LICENSE) para detalles
 
 ## Autor ✒️
 [**Vicente Aguilera Arias**](https://github.com/ViceAguilera)
