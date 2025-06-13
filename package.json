@@ -1,0 +1,16 @@
+{
+    "name": "siriustools",
+    "private": true,
+    "workspaces": [
+        "backend",
+        "frontend"
+    ],
+    "scripts": {
+        "start:backend": "npm --workspace=backend run start:dev",
+        "start:frontend": "npm --workspace=frontend run dev",
+        "start:all": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}

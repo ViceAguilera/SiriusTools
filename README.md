@@ -1,6 +1,6 @@
 # SiriusTools
 
-###### **DESARROLLO**
+###### **EN DESARROLLO**
 
 _Es un conjunto de herramientas en un solo lugar, simplemente para optimizar tiempo y no temer a los virus de las paginas Youtube -> MP3 o otras que se me vayan ocurriendo xd, podrás:_
 
