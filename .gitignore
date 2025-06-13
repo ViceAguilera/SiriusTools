@@ -6,3 +6,4 @@ dist/
 .vscode/
 # Cursor Pro
 .cursor/
+*.log
