@@ -2,7 +2,12 @@ services:
   app:
     build: .
     env_file: .env
+    # Mismo usuario que el dueño de ./secrets en el VPS (APP_UID/APP_GID en .env), para leer las cookies sin
+    # cambiarle el dueño a la carpeta. Por defecto 1000, el usuario "node" de la imagen.
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     environment:
+      # Con un usuario sin entrada en /etc/passwd, HOME sería "/" y yt-dlp no podría escribir su caché.
+      HOME: /tmp
       YTDLP_POT_URL: http://pot:4416
       YTDLP_COOKIES: /run/secrets/youtube-cookies.txt
     # Cookies de YouTube (opcionales): ./secrets/youtube-cookies.txt en el VPS, fuera de git y de la imagen.
