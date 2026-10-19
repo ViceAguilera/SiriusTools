@@ -1,5 +1,5 @@
 // Descargas de YouTube en el servidor: cola en memoria, un proceso yt-dlp por trabajo y limpieza automática.
-import { YTDLP_PATH } from 'astro:env/server';
+import { YTDLP_PATH, YTDLP_POT_URL } from 'astro:env/server';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -96,7 +96,7 @@ function run(job: Job, url: string, format: Format): Promise<void> {
   return new Promise((resolve) => {
     let lastError = '';
     let skipped = false;
-    const child = spawn(YTDLP_PATH, buildArgs(url, format, dir), { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const child = spawn(YTDLP_PATH, buildArgs(url, format, dir, YTDLP_POT_URL), { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const timer = setTimeout(() => child.kill('SIGKILL'), TIMEOUT_MS);
 
     const onLine = (line: string) => {

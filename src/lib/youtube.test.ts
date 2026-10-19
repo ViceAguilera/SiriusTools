@@ -53,6 +53,13 @@ describe('buildArgs', () => {
     expect(mp4).not.toContain('-x');
     expect(mp4).toEqual(expect.arrayContaining(['--merge-output-format', 'mp4']));
   });
+
+  it('pasa el generador de tokens PO solo si está configurado', () => {
+    expect(buildArgs(CANON, 'mp3', '/t')).not.toContain('--extractor-args');
+    const args = buildArgs(CANON, 'mp3', '/t', 'http://pot:4416');
+    expect(args[args.indexOf('--extractor-args') + 1]).toBe('youtubepot-bgutilhttp:base_url=http://pot:4416');
+    expect(args.slice(-2)).toEqual(['--', CANON]);
+  });
 });
 
 describe('parseLine', () => {

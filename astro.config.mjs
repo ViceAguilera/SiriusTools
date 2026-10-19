@@ -19,6 +19,8 @@ export default defineConfig({
       // true solo si la app está detrás de un proxy propio (Nginx) que agrega X-Forwarded-For.
       TRUST_PROXY: envField.boolean({ context: 'server', access: 'secret', default: false }),
       YTDLP_PATH: envField.string({ context: 'server', access: 'secret', default: 'yt-dlp' }),
+      // Generador de tokens PO (bgutil). Sin definir: yt-dlp va sin tokens.
+      YTDLP_POT_URL: envField.string({ context: 'server', access: 'secret', optional: true, url: true }),
     }
   },
 

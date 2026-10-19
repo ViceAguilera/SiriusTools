@@ -2,6 +2,10 @@ services:
   app:
     build: .
     env_file: .env
+    environment:
+      YTDLP_POT_URL: http://pot:4416
+    depends_on:
+      - pot
     ports:
       # Solo desde el propio VPS: se entra por Nginx. Docker se salta ufw si se publica en 0.0.0.0.
       - "127.0.0.1:9002:9002"
@@ -21,3 +25,14 @@ services:
       timeout: 5s
       start_period: 10s
       start_interval: 2s
+
+  # Generador de tokens PO para yt-dlp (el plugin bgutil-ytdlp-pot-provider de la imagen le pide tokens).
+  # Propio y sin puertos publicados: solo lo ve la app por la red interna de este compose.
+  # Imagen y plugin van en "latest" para que coincidan: actualizar juntos (docker compose pull + build --no-cache).
+  pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 100

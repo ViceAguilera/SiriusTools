@@ -36,7 +36,7 @@ export function canonicalVideoUrl(input: string): string | null {
 }
 
 /** Argumentos de yt-dlp. Los formatos son los mismos de la app de escritorio, más FLAC. */
-export function buildArgs(videoUrl: string, format: Format, outDir: string): string[] {
+export function buildArgs(videoUrl: string, format: Format, outDir: string, potUrl?: string): string[] {
   const args = [
     '--no-playlist',
     '--newline',
@@ -57,6 +57,8 @@ export function buildArgs(videoUrl: string, format: Format, outDir: string): str
   } else {
     args.push('-x', '--audio-format', format, '--audio-quality', '0', '--embed-thumbnail', '--embed-metadata');
   }
+  // Tokens PO (plugin bgutil-ytdlp-pot-provider): sin ellos YouTube suele pedir "confirm you're not a bot" a la IP del VPS.
+  if (potUrl) args.push('--extractor-args', `youtubepot-bgutilhttp:base_url=${potUrl}`);
   // "--" impide que la URL se interprete como opción.
   return [...args, '--', videoUrl];
 }
