@@ -1,0 +1,143 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Quitar metadatos">
+  <h1 class="text-2xl font-semibold">Quitar metadatos</h1>
+  <p class="mt-1 text-sm text-muted">
+    Se borran la ubicación GPS, la cámara, la fecha y los comentarios. La imagen no se vuelve a comprimir.
+  </p>
+  <p class="mt-1 text-sm text-muted">Todo ocurre en tu navegador: los archivos no se suben a ningún lado.</p>
+
+  <label
+    id="drop"
+    for="files"
+    class="mt-6 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-surface px-4 py-10 text-center focus-within:border-accent"
+  >
+    <span class="font-medium">Elige imágenes o arrástralas aquí</span>
+    <span class="text-sm text-muted">JPEG, PNG o WebP; puedes elegir varias</span>
+    <input id="files" type="file" multiple class="sr-only" accept="image/jpeg,image/png,image/webp" />
+  </label>
+
+  <div id="results" class="mt-6 hidden flex-col gap-3">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="font-medium">Archivos</h2>
+      <button id="download-all" type="button" class="btn-primary" disabled>Descargar todas</button>
+    </div>
+    <ul id="list" class="flex flex-col gap-3"></ul>
+  </div>
+</Layout>
+
+<style>
+  #results:not(.hidden) {
+    display: flex;
+  }
+  #drop.is-over {
+    border-color: var(--color-accent);
+  }
+</style>
+
+<script>
+  import { formatBytes } from '../lib/image';
+  import { cleanFilename, stripMetadata, type StripResult } from '../lib/metadata';
+
+  interface Entry {
+    blob: Blob;
+    filename: string;
+  }
+
+  const drop = document.querySelector<HTMLLabelElement>('#drop')!;
+  const input = document.querySelector<HTMLInputElement>('#files')!;
+  const results = document.querySelector<HTMLDivElement>('#results')!;
+  const list = document.querySelector<HTMLUListElement>('#list')!;
+  const downloadAll = document.querySelector<HTMLButtonElement>('#download-all')!;
+
+  const ready: Entry[] = [];
+
+  function download({ blob, filename }: Entry) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function addRow(name: string): { done(file: File, result: StripResult): void; fail(message: string): void } {
+    const item = document.createElement('li');
+    item.className = 'card flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between';
+    const info = document.createElement('div');
+    info.className = 'min-w-0';
+    const title = document.createElement('p');
+    title.className = 'break-words font-medium';
+    title.textContent = name;
+    const detail = document.createElement('p');
+    detail.className = 'text-sm text-muted';
+    detail.textContent = 'Procesando…';
+    info.append(title, detail);
+    item.append(info);
+    list.append(item);
+    results.classList.remove('hidden');
+
+    return {
+      done(file, result) {
+        const entry = { blob: new Blob([result.data as BlobPart], { type: file.type }), filename: cleanFilename(file.name, result.kind) };
+        ready.push(entry);
+        downloadAll.disabled = false;
+        const found = result.found.length ? `Encontrado: ${result.found.join(', ')}.` : 'No tenía metadatos.';
+        detail.textContent = `${found} ${formatBytes(file.size)} → ${formatBytes(result.data.length)}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn shrink-0 self-start sm:self-auto';
+        button.textContent = 'Descargar';
+        button.setAttribute('aria-label', `Descargar ${entry.filename}`);
+        button.addEventListener('click', () => download(entry));
+        item.append(button);
+      },
+      fail(message) {
+        detail.textContent = message;
+        detail.className = 'text-sm text-danger';
+        detail.setAttribute('role', 'alert');
+      },
+    };
+  }
+
+  async function handle(files: FileList | File[]) {
+    for (const file of files) {
+      const row = addRow(file.name);
+      try {
+        const result = stripMetadata(new Uint8Array(await file.arrayBuffer()));
+        row.done(file, result);
+      } catch (error) {
+        row.fail(error instanceof Error ? error.message : 'No se pudo procesar el archivo.');
+      }
+    }
+  }
+
+  input.addEventListener('change', () => {
+    if (input.files?.length) void handle([...input.files]);
+    input.value = '';
+  });
+  drop.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    drop.classList.add('is-over');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop.addEventListener('drop', (event) => {
+    event.preventDefault();
+    drop.classList.remove('is-over');
+    if (event.dataTransfer?.files.length) void handle([...event.dataTransfer.files]);
+  });
+
+  downloadAll.addEventListener('click', async () => {
+    downloadAll.disabled = true;
+    for (const entry of ready) {
+      download(entry);
+      // Una pausa corta evita que el navegador bloquee las descargas encadenadas.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    downloadAll.disabled = false;
+  });
+</script>

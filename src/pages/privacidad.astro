@@ -1,0 +1,38 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Privacidad" nav={false}>
+  <article class="mx-auto max-w-2xl">
+    <a href="/" class="text-sm text-muted hover:text-text">← volver</a>
+    <h1 class="mt-4 text-2xl font-semibold">privacidad y cookies</h1>
+    <p class="mt-2 text-sm text-muted">Herramientas personales, de uso privado para quien tiene la clave.</p>
+
+    <h2 class="mt-8 font-semibold">Cookies</h2>
+    <p class="mt-2 text-sm leading-relaxed">
+      Una sola cookie, <code>tools_session</code>, que mantiene tu sesión abierta 30 días después de escribir la clave. Es
+      necesaria para que el sitio funcione, no guarda datos personales y no se comparte con nadie. No hay cookies de
+      publicidad, analítica ni de terceros.
+    </p>
+
+    <h2 class="mt-8 font-semibold">Lo que guarda tu navegador</h2>
+    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed">
+      <li>El tema claro u oscuro, si lo cambiaste con el botón.</li>
+      <li>La cola de descargas de la pestaña abierta (se borra al cerrarla).</li>
+      <li>Que ya viste el aviso de cookies.</li>
+    </ul>
+    <p class="mt-2 text-sm leading-relaxed">Nada de eso sale de tu equipo.</p>
+
+    <h2 class="mt-8 font-semibold">Tus archivos</h2>
+    <p class="mt-2 text-sm leading-relaxed">
+      Imágenes, PDF, QR y metadatos se procesan en tu navegador: los archivos nunca se suben al servidor. Las descargas
+      de YouTube sí pasan por el servidor: el archivo queda ahí 15 minutos para que lo bajes y luego se borra.
+    </p>
+
+    <h2 class="mt-8 font-semibold">Registros del servidor</h2>
+    <p class="mt-2 text-sm leading-relaxed">
+      Como cualquier sitio, el servidor anota la dirección IP y la página pedida para detectar abusos (por ejemplo,
+      intentos de adivinar la clave). Esos registros no se usan para nada más.
+    </p>
+  </article>
+</Layout>

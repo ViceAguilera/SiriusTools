@@ -1,0 +1,220 @@
+---
+import '../styles/global.css';
+import Queue from '../components/Queue.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import CookieNotice from '../components/CookieNotice.astro';
+import fontRegular from '../fonts/ibm-plex-mono-400.woff2?url';
+import { tools } from '../config/tools';
+
+interface Props {
+  title: string;
+  /** Muestra el riel de herramientas y la cola. La pantalla de entrada no los lleva. */
+  nav?: boolean;
+}
+
+const { title, nav = true } = Astro.props;
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href={fontRegular} as="font" type="font/woff2" crossorigin />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <title>{`${title} · tools`}</title>
+    <script is:inline src="/theme-init.js"></script>
+  </head>
+  <body class="min-h-dvh antialiased">
+    <a href="#contenido" class="skip-link">saltar al contenido</a>
+    {
+      nav ? (
+        <div class="app">
+          <nav class="rail" aria-label="Herramientas">
+            <a href="/youtube" class="rail-logo" aria-label="Inicio">
+              &gt;_
+            </a>
+            {tools.map((tool) => (
+              <a href={tool.href} class="rail-item" aria-current={path === tool.href ? 'page' : undefined}>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  set:html={tool.icon}
+                />
+                <span>{tool.label}</span>
+              </a>
+            ))}
+            <form method="post" action="/salir" class="rail-exit">
+              <button class="rail-item">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M15 4h4v16h-4" />
+                  <path d="M10 8l-4 4 4 4" />
+                  <path d="M6 12h10" />
+                </svg>
+                <span>salir</span>
+              </button>
+            </form>
+          </nav>
+
+          <div class="content">
+            <header class="topbar">
+              <a href="/youtube" class="text-sm text-muted hover:text-text">
+                sirius/tools
+              </a>
+              <div class="flex items-center gap-3">
+                <form method="post" action="/salir" class="topbar-exit">
+                  <button class="text-sm text-muted hover:text-text">salir</button>
+                </form>
+                <ThemeToggle />
+                <Queue />
+              </div>
+            </header>
+            <main id="contenido" class="mx-auto w-full max-w-4xl px-4 pt-4 pb-10">
+              <slot />
+            </main>
+          </div>
+        </div>
+      ) : (
+        <div class="flex justify-end px-5 pt-4">
+          <ThemeToggle />
+        </div>
+        <main id="contenido" class="mx-auto max-w-4xl px-4 py-8">
+          <slot />
+        </main>
+      )
+    }
+    <CookieNotice />
+  </body>
+</html>
+
+<style is:global>
+  .skip-link {
+    position: absolute;
+    left: 12px;
+    top: -60px;
+    z-index: 60;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+    font-size: 14px;
+  }
+  .skip-link:focus {
+    top: 12px;
+  }
+  .app {
+    display: flex;
+    min-height: 100dvh;
+  }
+  .content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 0;
+  }
+
+  .rail {
+    position: sticky;
+    top: 0;
+    flex: 0 0 96px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 8px;
+    box-sizing: border-box;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-line);
+  }
+  .rail-logo {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -1px;
+    margin-bottom: 14px;
+  }
+  .rail-item {
+    width: 80px;
+    padding: 10px 0;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--color-muted);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .rail-item:hover {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+  }
+  .rail-item[aria-current='page'] {
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+  .rail-exit {
+    margin-top: auto;
+  }
+  .topbar-exit {
+    display: none;
+  }
+
+  /* Celular: el riel pasa a ser una barra fija abajo y "salir" sube a la barra superior. */
+  @media (max-width: 767px) {
+    .rail {
+      position: fixed;
+      inset: auto 0 0 0;
+      z-index: 30;
+      height: auto;
+      flex-direction: row;
+      justify-content: space-around;
+      gap: 0;
+      padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+      background: var(--color-accent);
+      border: 0;
+    }
+    .rail-logo,
+    .rail-exit {
+      display: none;
+    }
+    .rail-item {
+      width: auto;
+      flex: 1;
+      padding: 8px 0;
+      font-size: 10px;
+      color: color-mix(in srgb, var(--color-accent-ink) 75%, transparent);
+    }
+    .rail-item:hover {
+      background: transparent;
+      color: var(--color-accent-ink);
+    }
+    .rail-item[aria-current='page'] {
+      background: var(--color-accent-ink);
+      color: var(--color-accent);
+    }
+    .content {
+      padding-bottom: 80px;
+    }
+    .topbar-exit {
+      display: block;
+    }
+  }
+</style>

@@ -1,0 +1,302 @@
+---
+// Cola de descargas de la sesión: botón con contador y panel desplegable.
+// Vive en el layout para seguir el avance desde cualquier herramienta. Se guarda en sessionStorage:
+// se pierde al cerrar la pestaña, y cada descarga sale sola de la lista cuando el servidor borra el archivo.
+---
+
+<div class="queue">
+  <button
+    type="button"
+    id="queue-toggle"
+    class="queue-toggle"
+    aria-expanded="false"
+    aria-controls="queue-panel"
+    aria-label="Cola de descargas"
+  >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 4v13"></path>
+      <path d="m6 11 6 6 6-6"></path>
+    </svg>
+    <span id="queue-count" class="queue-count" hidden></span>
+  </button>
+
+  <section id="queue-panel" class="queue-panel" aria-label="Cola de la sesión" hidden>
+    <div class="flex items-center justify-between">
+      <h2 class="text-[15px] font-semibold">cola de la sesión</h2>
+      <button type="button" id="queue-clear" class="text-xs text-muted underline hover:text-text">limpiar</button>
+    </div>
+    <ul id="queue-list" class="flex flex-col gap-2"></ul>
+    <p id="queue-empty" class="py-6 text-center text-sm text-muted">nada por aquí todavía.<br />descarga algo.</p>
+    <p class="text-xs text-muted">solo en esta pestaña · el servidor borra cada archivo a los 15 min</p>
+  </section>
+</div>
+
+<template id="queue-item">
+  <li class="queue-item">
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0 flex-1">
+        <p class="queue-name truncate text-[13px]"></p>
+        <p class="queue-meta mt-1 text-[11px] text-muted"></p>
+      </div>
+      <button type="button" class="queue-save btn-primary min-h-8! rounded-lg! px-3! py-1! text-xs!" hidden>guardar</button>
+      <button type="button" class="queue-remove grid size-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-text">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+      </button>
+    </div>
+    <div class="queue-bar mt-2 h-1 overflow-hidden rounded bg-surface-2" hidden>
+      <div class="h-full rounded bg-accent transition-[width] duration-300"></div>
+    </div>
+  </li>
+</template>
+
+<style is:global>
+  .queue {
+    position: relative;
+  }
+  .queue-toggle {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+  .queue-toggle:hover {
+    background: var(--color-surface-2);
+  }
+  .queue-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+    font-size: 10px;
+    display: grid;
+    place-items: center;
+  }
+  .queue-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 40;
+    width: min(380px, calc(100vw - 32px));
+    max-height: min(70dvh, 560px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px;
+    box-sizing: border-box;
+    border-radius: 22px;
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+    box-shadow: 0 12px 40px rgb(0 0 0 / 0.12);
+    transform-origin: top right;
+    animation: queue-in 0.16s ease-out;
+  }
+  .queue-panel[hidden] {
+    display: none;
+  }
+  .queue-item {
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--color-bg);
+  }
+  .queue-item.is-error .queue-meta {
+    color: var(--color-danger);
+  }
+  @keyframes queue-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-4px);
+    }
+  }
+</style>
+
+<script>
+  import { addToQueue, type QueueItem, loadQueue, saveQueue } from '../lib/queue-store';
+
+  const queueRoot = document.querySelector<HTMLDivElement>('.queue')!;
+  const toggle = document.querySelector<HTMLButtonElement>('#queue-toggle')!;
+  const panel = document.querySelector<HTMLElement>('#queue-panel')!;
+  const count = document.querySelector<HTMLSpanElement>('#queue-count')!;
+  const list = document.querySelector<HTMLUListElement>('#queue-list')!;
+  const empty = document.querySelector<HTMLParagraphElement>('#queue-empty')!;
+  const clear = document.querySelector<HTMLButtonElement>('#queue-clear')!;
+  const template = document.querySelector<HTMLTemplateElement>('#queue-item')!;
+
+  const FORMAT_LABEL: Record<string, string> = { mp3: 'mp3', mp4: 'mp4', flac: 'flac' };
+  const ACTIVE = new Set(['queued', 'downloading', 'converting']);
+
+  let items: QueueItem[] = loadQueue();
+  let polling = false;
+  const nodes = new Map<string, HTMLLIElement>();
+
+  function setOpen(open: boolean) {
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+  }
+
+  function remaining(item: QueueItem): string {
+    const ms = Math.max(0, (item.expiresAt ?? 0) - Date.now());
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function sizeLabel(bytes?: number): string {
+    if (!bytes) return '';
+    return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.round(bytes / 1024)} KB`;
+  }
+
+  function meta(item: QueueItem): string {
+    const format = FORMAT_LABEL[item.format] ?? item.format;
+    switch (item.status) {
+      case 'queued':
+        return `en cola · ${format}`;
+      case 'downloading':
+        return `descargando · ${format} · ${Math.round(item.percent)}%`;
+      case 'converting':
+        return `convirtiendo · ${format}`;
+      case 'done':
+        return `listo · ${[sizeLabel(item.size), `se borra en ${remaining(item)}`].filter(Boolean).join(' · ')}`;
+      default:
+        return item.error ?? 'falló';
+    }
+  }
+
+  function save(item: QueueItem) {
+    const link = document.createElement('a');
+    link.href = `/api/yt/jobs/${item.id}/file`;
+    link.download = item.fileName ?? '';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    item.saved = true;
+    saveQueue(items);
+  }
+
+  function render() {
+    // Las descargas cuyo archivo ya se borró del servidor salen solas de la lista.
+    items = items.filter((item) => item.status !== 'done' || (item.expiresAt ?? 0) > Date.now());
+    saveQueue(items);
+
+    count.hidden = items.length === 0;
+    count.textContent = String(items.length);
+    toggle.setAttribute('aria-label', `Cola de descargas, ${items.length} en esta sesión`);
+    empty.hidden = items.length > 0;
+    clear.hidden = items.length === 0;
+
+    // Los nodos se reutilizan por id: rehacerlos cada segundo le quitaría el foco a quien navega con teclado.
+    for (const [id, node] of nodes) {
+      if (!items.some((item) => item.id === id)) {
+        node.remove();
+        nodes.delete(id);
+      }
+    }
+    items.forEach((item, index) => {
+      const node = nodes.get(item.id) ?? createNode(item.id);
+      const name = item.fileName ?? item.url.replace(/^https:\/\/www\./, '');
+      node.querySelector('.queue-name')!.textContent = name;
+      node.querySelector('.queue-meta')!.textContent = meta(item);
+      node.classList.toggle('is-error', item.status === 'error');
+
+      const bar = node.querySelector<HTMLDivElement>('.queue-bar')!;
+      bar.hidden = !ACTIVE.has(item.status);
+      (bar.firstElementChild as HTMLDivElement).style.width = `${item.status === 'converting' ? 100 : item.percent}%`;
+
+      const saveButton = node.querySelector<HTMLButtonElement>('.queue-save')!;
+      saveButton.hidden = item.status !== 'done';
+      saveButton.setAttribute('aria-label', `Guardar ${name}`);
+      node.querySelector('.queue-remove')!.setAttribute('aria-label', `Quitar ${name} de la cola`);
+
+      if (list.children[index] !== node) list.insertBefore(node, list.children[index] ?? null);
+    });
+  }
+
+  function createNode(id: string): HTMLLIElement {
+    const node = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+    node.querySelector('.queue-save')!.addEventListener('click', () => {
+      const item = items.find((other) => other.id === id);
+      if (item) save(item);
+    });
+    node.querySelector('.queue-remove')!.addEventListener('click', () => {
+      items = items.filter((other) => other.id !== id);
+      render();
+      toggle.focus();
+    });
+    nodes.set(id, node);
+    return node;
+  }
+
+  async function refresh(item: QueueItem) {
+    const response = await fetch(`/api/yt/jobs/${item.id}`);
+    if (response.status === 401) return location.assign(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+    const data = (await response.json()) as Partial<QueueItem> & { expiresIn?: number };
+    if (!response.ok) {
+      Object.assign(item, { status: 'error', error: 'ya no está en el servidor' });
+      return;
+    }
+    const wasActive = ACTIVE.has(item.status);
+    Object.assign(item, {
+      status: data.status,
+      percent: data.percent ?? 0,
+      error: data.error,
+      fileName: data.fileName,
+      size: data.size,
+      expiresAt: data.expiresIn === undefined ? undefined : Date.now() + data.expiresIn,
+    });
+    // Se guarda sola al terminar mientras la página siga abierta, como en la app de escritorio.
+    if (wasActive && item.status === 'done' && !item.saved) save(item);
+  }
+
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    while (items.some((item) => ACTIVE.has(item.status))) {
+      await Promise.all(items.filter((item) => ACTIVE.has(item.status)).map((item) => refresh(item).catch(() => {})));
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    polling = false;
+  }
+
+  toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
+  clear.addEventListener('click', () => {
+    items = items.filter((item) => ACTIVE.has(item.status));
+    render();
+  });
+  document.addEventListener('click', (event) => {
+    // composedPath y no closest: el botón ✕ ya salió del DOM cuando llega este evento.
+    // isTrusted: el clic programático de save() en un <a> temporal no debe cerrar el panel.
+    if (event.isTrusted && !panel.hidden && !event.composedPath().includes(queueRoot)) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.hidden) {
+      setOpen(false);
+      toggle.focus();
+    }
+  });
+
+  window.addEventListener('queue:add', (event) => {
+    items = addToQueue(items, (event as CustomEvent<QueueItem>).detail);
+    render();
+    setOpen(true);
+    poll();
+  });
+
+  // La cuenta regresiva de los archivos listos avanza aunque no haya nada descargándose.
+  setInterval(() => {
+    if (items.some((item) => item.status === 'done')) render();
+  }, 1000);
+
+  render();
+  poll();
+</script>

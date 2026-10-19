@@ -1,0 +1,85 @@
+---
+// Botón claro/oscuro. Sin elección guardada se sigue al sistema; al tocarlo se fija el tema contrario
+// al que se ve y se guarda en localStorage (el script de Layout.astro lo aplica antes de pintar).
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<button type="button" class:list={['theme-toggle', className]} aria-label="Cambiar a modo claro" data-theme-toggle>
+  <!-- Sol: se muestra en oscuro (lleva a claro). Luna: se muestra en claro. -->
+  <svg class="theme-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4.2"></circle>
+    <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"></path>
+  </svg>
+  <svg class="theme-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"></path>
+  </svg>
+</button>
+
+<style is:global>
+  .theme-toggle {
+    display: inline-grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0;
+    border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-surface);
+    color: var(--color-text); cursor: pointer; transition: background-color 0.15s ease;
+  }
+  .theme-toggle:hover { background: var(--color-surface-2); }
+  .theme-toggle svg { grid-area: 1 / 1; width: 1.15rem; height: 1.15rem; }
+  .theme-moon { display: none; }
+  :root[data-theme='light'] .theme-sun { display: none; }
+  :root[data-theme='light'] .theme-moon { display: block; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) .theme-sun { display: none; }
+    :root:not([data-theme='dark']) .theme-moon { display: block; }
+  }
+
+  /* Cambio de tema: fundido de toda la página con View Transitions. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation-duration: 0.55s; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  /* Respaldo sin View Transitions: los colores se interpolan mientras dura la clase. */
+  html.theme-fading,
+  html.theme-fading *,
+  html.theme-fading *::before,
+  html.theme-fading *::after {
+    transition: background-color 0.55s ease, color 0.55s ease, border-color 0.55s ease, fill 0.55s ease, stroke 0.55s ease !important;
+  }
+</style>
+
+<script>
+  const root = document.documentElement;
+  const systemLight = matchMedia('(prefers-color-scheme: light)');
+  const current = () => (root.dataset.theme ?? (systemLight.matches ? 'light' : 'dark')) as 'light' | 'dark';
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]')];
+
+  function label() {
+    const next = current() === 'light' ? 'oscuro' : 'claro';
+    for (const b of buttons) b.setAttribute('aria-label', `Cambiar a modo ${next}`);
+  }
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  let fadeTimer: number | undefined;
+
+  function apply(next: 'light' | 'dark') {
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem('theme', next);
+    } catch {}
+    label();
+  }
+  for (const b of buttons) {
+    b.addEventListener('click', () => {
+      const next = current() === 'light' ? 'dark' : 'light';
+      if (reduced.matches) return apply(next);
+      if (document.startViewTransition) {
+        document.startViewTransition(() => apply(next));
+        return;
+      }
+      root.classList.add('theme-fading');
+      apply(next);
+      clearTimeout(fadeTimer);
+      fadeTimer = window.setTimeout(() => root.classList.remove('theme-fading'), 600);
+    });
+  }
+  systemLight.addEventListener('change', label);
+  label();
+</script>

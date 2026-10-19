@@ -1,0 +1,224 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { checkPassword, hasSession, startSession } from '../lib/auth';
+import { safeNext } from '../lib/redirect';
+import { clientIp, isLimited, rateLimited } from '../lib/server';
+
+// 5 intentos fallidos por IP cada 15 minutos: con una clave de 5 caracteres, esto es lo que frena a un bot.
+const MAX_FAILS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+
+const next = safeNext(Astro.url.searchParams.get('next'));
+if (hasSession(Astro.cookies)) return Astro.redirect(next);
+
+let error = '';
+if (Astro.request.method === 'POST') {
+  const wantsJson = Astro.request.headers.get('accept')?.includes('application/json');
+  const key = `login:${clientIp(Astro.request, Astro.clientAddress)}`;
+  let status = 401;
+  if (isLimited(key, MAX_FAILS, WINDOW_MS)) {
+    status = 429;
+    error = 'Demasiados intentos. Espera 15 minutos.';
+  } else {
+    const password = (await Astro.request.formData()).get('password');
+    if (typeof password === 'string' && checkPassword(password)) {
+      startSession(Astro.cookies);
+      return wantsJson ? Response.json({ ok: true, next }) : Astro.redirect(next, 303);
+    }
+    rateLimited(key, MAX_FAILS, WINDOW_MS);
+    error = 'Clave incorrecta.';
+  }
+  if (wantsJson) return Response.json({ ok: false, error }, { status });
+  Astro.response.status = status;
+}
+---
+
+<Layout title="Entrar" nav={false}>
+  <div class="flex min-h-[70dvh] flex-col items-center justify-center text-center">
+    <svg id="lock" class="lock" viewBox="0 0 64 72" width="72" height="80" aria-hidden="true">
+      <path class="lock-shackle" d="M18 32V22a14 14 0 0 1 28 0v10" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"></path>
+      <rect class="lock-body" x="8" y="30" width="48" height="38" rx="8" fill="currentColor"></rect>
+      <circle cx="32" cy="47" r="5" fill="var(--color-bg)"></circle>
+      <rect x="30" y="49" width="4" height="9" rx="2" fill="var(--color-bg)"></rect>
+    </svg>
+
+    <h1 class="mt-6 text-[28px] font-semibold tracking-[-1px]">&gt;_ tools</h1>
+    <p class="mt-1 text-sm text-muted">escribe la clave para entrar</p>
+
+    <form id="login" method="post" class="mt-8 flex flex-col items-center gap-4">
+      <label for="password" class="sr-only">Clave de 5 caracteres</label>
+      <div class="pin relative" id="pin">
+        <input
+          id="password"
+          name="password"
+          type="password"
+          maxlength="5"
+          minlength="5"
+          required
+          autofocus
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          class="pin-input"
+        />
+        <div class="flex gap-2" aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((i) => <span class="pin-box" data-i={i} />)}
+        </div>
+      </div>
+      <p id="error" role="alert" class="min-h-5 text-sm text-danger">{error}</p>
+      <noscript><button class="btn-primary">Entrar</button></noscript>
+    </form>
+  </div>
+</Layout>
+
+<style is:global>
+  .lock {
+    color: var(--color-text);
+    transition: color 0.3s ease;
+  }
+  .lock-shackle {
+    transform-origin: 46px 32px;
+    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .lock.is-open {
+    color: var(--color-ok);
+  }
+  .lock.is-open .lock-shackle {
+    transform: translateY(-6px) rotate(28deg);
+  }
+  .lock.is-leaving {
+    animation: lock-out 0.4s 0.35s ease-in forwards;
+  }
+  @keyframes lock-out {
+    to {
+      opacity: 0;
+      transform: scale(1.15);
+    }
+  }
+
+  /* El input real queda encima de las cajas, transparente: así funcionan pegar, el teclado del celular
+     y los gestores de contraseñas sin reimplementar nada. */
+  .pin-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    font-size: 16px; /* evita el zoom automático de iOS */
+    cursor: text;
+  }
+  .pin-box {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3.5rem;
+    border: 1.5px solid var(--color-line-strong);
+    border-radius: 12px;
+    background: var(--color-bg);
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .pin-box.is-filled::after {
+    content: '';
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    background: var(--color-text);
+    animation: dot-in 0.15s ease-out;
+  }
+  .pin-box.is-active {
+    border-color: var(--color-text);
+  }
+  .pin.is-ok .pin-box {
+    border-color: var(--color-ok);
+  }
+  .pin.is-error {
+    animation: shake 0.4s ease;
+  }
+  .pin.is-error .pin-box {
+    border-color: var(--color-danger);
+  }
+  @keyframes dot-in {
+    from {
+      transform: scale(0);
+    }
+  }
+  @keyframes shake {
+    20%,
+    60% {
+      transform: translateX(-8px);
+    }
+    40%,
+    80% {
+      transform: translateX(8px);
+    }
+  }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#login')!;
+  const input = document.querySelector<HTMLInputElement>('#password')!;
+  const pin = document.querySelector<HTMLDivElement>('#pin')!;
+  const boxes = [...document.querySelectorAll<HTMLSpanElement>('.pin-box')];
+  const lock = document.querySelector<SVGSVGElement>('#lock')!;
+  const errorText = document.querySelector<HTMLParagraphElement>('#error')!;
+  let busy = false;
+
+  function paint() {
+    const n = input.value.length;
+    boxes.forEach((box, i) => {
+      box.classList.toggle('is-filled', i < n);
+      box.classList.toggle('is-active', document.activeElement === input && i === Math.min(n, 4));
+    });
+  }
+
+  async function submit() {
+    if (busy) return;
+    busy = true;
+    input.readOnly = true;
+    try {
+      const response = await fetch(location.href, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: new FormData(form),
+      });
+      const data = (await response.json()) as { ok: boolean; next?: string; error?: string };
+      if (data.ok) {
+        pin.classList.add('is-ok');
+        lock.classList.add('is-open', 'is-leaving');
+        setTimeout(() => location.assign(data.next ?? '/'), 750);
+        return;
+      }
+      fail(data.error ?? 'Clave incorrecta.');
+    } catch {
+      fail('Sin conexión. Intenta de nuevo.');
+    }
+  }
+
+  function fail(message: string) {
+    errorText.textContent = message;
+    pin.classList.remove('is-error');
+    void pin.offsetWidth; // reinicia la animación si falla dos veces seguidas
+    pin.classList.add('is-error');
+    setTimeout(() => {
+      input.value = '';
+      input.readOnly = false;
+      busy = false;
+      input.focus();
+      paint();
+    }, 400);
+  }
+
+  input.addEventListener('input', () => {
+    errorText.textContent = '';
+    pin.classList.remove('is-error');
+    paint();
+    if (input.value.length === 5) submit();
+  });
+  input.addEventListener('focus', paint);
+  input.addEventListener('blur', paint);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (input.value.length === 5) submit();
+  });
+  paint();
+</script>

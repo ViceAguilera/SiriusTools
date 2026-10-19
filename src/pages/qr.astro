@@ -1,0 +1,156 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Código QR">
+  <h1 class="text-xl font-semibold">Código QR</h1>
+  <p class="mt-1 text-sm text-muted">Todo se genera en tu navegador; el texto no se envía a ningún lado.</p>
+
+  <div class="mt-6 grid gap-4 md:grid-cols-2">
+    <div class="card min-w-0 space-y-4">
+      <div>
+        <label for="text" class="label">Texto o link</label>
+        <textarea id="text" rows="4" class="input mt-1" placeholder="https://ejemplo.com"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="size" class="label">Tamaño</label>
+          <select id="size" class="input mt-1">
+            <option value="256">256 px</option>
+            <option value="512" selected>512 px</option>
+            <option value="1024">1024 px</option>
+          </select>
+        </div>
+        <div>
+          <label for="margin" class="label">Margen (0–8)</label>
+          <input id="margin" type="number" min="0" max="8" step="1" value="2" class="input mt-1" />
+        </div>
+      </div>
+      <div>
+        <label for="ecl" class="label">Corrección de errores</label>
+        <select id="ecl" class="input mt-1">
+          <option value="L">L · 7 %, el QR más simple</option>
+          <option value="M" selected>M · 15 %, uso general</option>
+          <option value="Q">Q · 25 %, tolera algo de desgaste</option>
+          <option value="H">H · 30 %, para logos o impresos</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="fg" class="label">Color del QR</label>
+          <input id="fg" type="color" value="#000000" class="input mt-1 h-10 p-1" />
+        </div>
+        <div>
+          <label for="bg" class="label">Color de fondo</label>
+          <input id="bg" type="color" value="#ffffff" class="input mt-1 h-10 p-1" />
+        </div>
+      </div>
+      <p id="warning" class="min-h-5 text-sm text-muted"></p>
+    </div>
+
+    <div class="card min-w-0 space-y-4">
+      <p id="error" role="alert" class="min-h-5 text-sm text-danger"></p>
+      <div class="flex justify-center">
+        <canvas id="canvas" class="h-auto max-w-full rounded-lg border border-line" width="256" height="256" aria-label="Vista previa del código QR"></canvas>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="png" class="btn-primary" disabled>Descargar PNG</button>
+        <button type="button" id="svg" class="btn" disabled>Descargar SVG</button>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  import QRCode from 'qrcode';
+  import { contrastRatio } from '../lib/color';
+
+  const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+  const text = $<HTMLTextAreaElement>('#text');
+  const size = $<HTMLSelectElement>('#size');
+  const margin = $<HTMLInputElement>('#margin');
+  const ecl = $<HTMLSelectElement>('#ecl');
+  const fg = $<HTMLInputElement>('#fg');
+  const bg = $<HTMLInputElement>('#bg');
+  const warning = $<HTMLParagraphElement>('#warning');
+  const errorBox = $<HTMLParagraphElement>('#error');
+  const canvas = $<HTMLCanvasElement>('#canvas');
+  const pngButton = $<HTMLButtonElement>('#png');
+  const svgButton = $<HTMLButtonElement>('#svg');
+
+  function options() {
+    return {
+      width: Number(size.value),
+      margin: Math.min(8, Math.max(0, Math.round(Number(margin.value) || 0))),
+      errorCorrectionLevel: ecl.value as 'L' | 'M' | 'Q' | 'H',
+      color: { dark: fg.value, light: bg.value },
+    };
+  }
+
+  function friendlyError(error: unknown): string {
+    const message = error instanceof Error ? error.message : '';
+    if (/too big|too long|capacity|overflow/i.test(message)) {
+      return 'El texto es demasiado largo para un código QR. Acórtalo o baja el nivel de corrección de errores.';
+    }
+    return 'No se pudo generar el código QR.';
+  }
+
+  async function render() {
+    const ratio = contrastRatio(fg.value, bg.value);
+    warning.textContent = ratio < 3 ? 'Contraste bajo entre el QR y el fondo: puede que algunos lectores no lo lean.' : '';
+    errorBox.textContent = '';
+    if (!text.value) {
+      canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+      pngButton.disabled = svgButton.disabled = true;
+      return;
+    }
+    try {
+      await QRCode.toCanvas(canvas, text.value, options());
+      // qrcode fija el ancho en línea; se libera para que el canvas de 1024 px quepa en pantallas angostas.
+      canvas.style.width = '';
+      canvas.style.height = '';
+      pngButton.disabled = svgButton.disabled = false;
+    } catch (error) {
+      errorBox.textContent = friendlyError(error);
+      pngButton.disabled = svgButton.disabled = true;
+    }
+  }
+
+  function save(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  pngButton.addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      if (blob) save(blob, 'qr.png');
+      else errorBox.textContent = 'No se pudo crear la imagen PNG.';
+    }, 'image/png');
+  });
+
+  svgButton.addEventListener('click', async () => {
+    try {
+      const svg = await QRCode.toString(text.value, { ...options(), type: 'svg' });
+      save(new Blob([svg], { type: 'image/svg+xml' }), 'qr.svg');
+    } catch (error) {
+      errorBox.textContent = friendlyError(error);
+    }
+  });
+
+  let timer: ReturnType<typeof setTimeout>;
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(render, 150);
+  };
+  for (const el of [text, size, margin, ecl, fg, bg]) {
+    el.addEventListener('input', schedule);
+    el.addEventListener('change', schedule);
+  }
+  void render();
+</script>

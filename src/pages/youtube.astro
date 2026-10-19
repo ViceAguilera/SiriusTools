@@ -1,0 +1,132 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Descargar">
+  <div class="flex min-h-[calc(100dvh-180px)] flex-col items-center justify-center">
+    <form id="yt" class="flex w-full max-w-[640px] flex-col gap-3">
+      <div class="mb-5 text-center">
+        <h1 class="text-[44px] leading-none font-semibold tracking-[-2px]">&gt;_ tools</h1>
+        <p class="mt-2 text-[13px] text-muted">youtube → mp4, mp3 o flac</p>
+      </div>
+
+      <label for="url" class="sr-only">Link del video</label>
+      <div class="url-bar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted" aria-hidden="true">
+          <path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path>
+          <path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path>
+        </svg>
+        <input
+          id="url"
+          name="url"
+          type="url"
+          inputmode="url"
+          placeholder="pega el link aquí"
+          required
+          autocomplete="off"
+          class="min-w-0 flex-1 bg-transparent text-base outline-none"
+        />
+        <button id="submit" class="btn-primary size-[34px]! min-h-0! rounded-lg! p-0!" aria-label="Descargar">&gt;&gt;</button>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <fieldset class="segmented">
+          <legend class="sr-only">Formato</legend>
+          <label><input type="radio" name="format" value="mp4" />video · mp4</label>
+          <label><input type="radio" name="format" value="mp3" checked />audio · mp3</label>
+          <label title="YouTube entrega audio comprimido: FLAC no gana calidad, sirve para editar.">
+            <input type="radio" name="format" value="flac" />flac
+          </label>
+        </fieldset>
+        <button type="button" id="paste" class="btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="8" y="3" width="8" height="4" rx="1"></rect>
+            <path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"></path>
+          </svg>
+          pegar y descargar
+        </button>
+      </div>
+
+      <p id="status" class="min-h-5 text-sm" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <p class="text-center text-xs text-muted">solo videos sueltos · hasta 3 h · los archivos se borran del servidor a los 15 min</p>
+</Layout>
+
+<style>
+  .url-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 7px 0 14px;
+    border: 1.5px solid var(--color-line-strong);
+    border-radius: 12px;
+    transition: border-color 0.15s ease;
+  }
+  .url-bar:focus-within {
+    border-color: var(--color-text);
+  }
+  /* El borde de la barra ya marca el foco; un segundo contorno dentro se ve como un error. */
+  .url-bar input:focus-visible {
+    outline: none;
+  }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#yt')!;
+  const urlInput = document.querySelector<HTMLInputElement>('#url')!;
+  const button = document.querySelector<HTMLButtonElement>('#submit')!;
+  const pasteButton = document.querySelector<HTMLButtonElement>('#paste')!;
+  const statusText = document.querySelector<HTMLParagraphElement>('#status')!;
+
+  function say(message: string, isError = false) {
+    statusText.textContent = message;
+    statusText.classList.toggle('text-danger', isError);
+    statusText.classList.toggle('text-muted', !isError);
+  }
+
+  async function start() {
+    const format = String(new FormData(form).get('format'));
+    button.disabled = true;
+    say('');
+    try {
+      const response = await fetch('/api/yt/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput.value, format }),
+      });
+      if (response.status === 401) return location.assign('/entrar?next=/youtube');
+      const data = (await response.json()) as { id?: string; error?: string };
+      if (!response.ok || !data.id) return say(data.error ?? 'algo falló.', true);
+      window.dispatchEvent(
+        new CustomEvent('queue:add', {
+          detail: { id: data.id, url: urlInput.value.trim(), format, status: 'queued', percent: 0 },
+        }),
+      );
+      say('agregado a la cola. puedes pegar otro link.');
+      urlInput.value = '';
+      urlInput.focus();
+    } catch {
+      say('sin conexión con el servidor.', true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    start();
+  });
+
+  pasteButton.addEventListener('click', async () => {
+    try {
+      urlInput.value = (await navigator.clipboard.readText()).trim();
+    } catch {
+      urlInput.focus();
+      return say('el navegador no dejó leer el portapapeles: pega el link con Ctrl+V.', true);
+    }
+    if (form.reportValidity()) start();
+  });
+</script>

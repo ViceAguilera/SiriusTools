@@ -1,0 +1,31 @@
+{
+  "name": "tools",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "test": "vitest run",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.8",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.4.0",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/node": "^24.19.2",
+    "@types/qrcode": "^1.5.6",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

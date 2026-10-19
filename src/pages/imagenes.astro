@@ -1,0 +1,511 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Imágenes">
+  <h1 class="text-2xl font-semibold">Imágenes</h1>
+  <p class="mt-1 text-sm text-muted">
+    Recorta, cambia el tamaño y convierte. Todo ocurre en tu navegador: la imagen no se sube a ningún lado.
+  </p>
+
+  <label
+    id="drop"
+    for="file"
+    class="mt-6 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-surface px-4 py-10 text-center focus-within:border-accent"
+  >
+    <span class="font-medium">Elige una imagen o arrástrala aquí</span>
+    <span class="text-sm text-muted">PNG, JPG, WebP, GIF, AVIF o HEIC</span>
+    <input
+      id="file"
+      type="file"
+      class="sr-only"
+      accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif,.heic,.heif"
+    />
+  </label>
+
+  <p id="error" role="alert" class="mt-3 min-h-5 text-sm text-danger"></p>
+
+  <div id="editor" class="mt-2 hidden gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div class="min-w-0">
+      <div class="card flex justify-center p-3">
+        <div id="stage" class="relative inline-block max-w-full select-none overflow-hidden">
+          <img id="preview" alt="Vista previa de la imagen" class="block max-h-[60dvh] max-w-full" draggable="false" />
+          <div id="sel" class="sel hidden">
+            <span class="handle" data-handle="nw"></span>
+            <span class="handle" data-handle="ne"></span>
+            <span class="handle" data-handle="sw"></span>
+            <span class="handle" data-handle="se"></span>
+          </div>
+        </div>
+      </div>
+      <p class="mt-2 text-sm text-muted">
+        Arrastra sobre la imagen para recortar; mueve o estira el recorte desde dentro o las esquinas.
+      </p>
+    </div>
+
+    <div class="card flex flex-col gap-5">
+      <section class="flex flex-col gap-2" aria-labelledby="crop-title">
+        <h2 id="crop-title" class="font-medium">Recortar</h2>
+        <label for="aspect" class="label">Proporción</label>
+        <select id="aspect" class="input">
+          <option value="">Libre</option>
+          <option value="1:1">1:1</option>
+          <option value="4:3">4:3</option>
+          <option value="16:9">16:9</option>
+          <option value="9:16">9:16</option>
+        </select>
+        <p id="crop-info" class="text-sm text-muted">Sin recorte: se usa la imagen completa.</p>
+        <button id="crop-clear" type="button" class="btn self-start" disabled>Quitar recorte</button>
+      </section>
+
+      <section class="flex flex-col gap-2" aria-labelledby="size-title">
+        <h2 id="size-title" class="font-medium">Redimensionar</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label for="width" class="label">Ancho (px)</label>
+            <input id="width" type="number" min="1" max="16384" step="1" inputmode="numeric" class="input" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="height" class="label">Alto (px)</label>
+            <input id="height" type="number" min="1" max="16384" step="1" inputmode="numeric" class="input" />
+          </div>
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input id="keep" type="checkbox" checked />
+          Mantener proporción
+        </label>
+      </section>
+
+      <section class="flex flex-col gap-2" aria-labelledby="out-title">
+        <h2 id="out-title" class="font-medium">Salida</h2>
+        <label for="format" class="label">Formato</label>
+        <select id="format" class="input">
+          <option value="jpg">JPG</option>
+          <option value="png">PNG</option>
+          <option value="webp">WebP</option>
+        </select>
+        <label for="quality" class="label">
+          Calidad: <output id="quality-out" for="quality">85</output>
+        </label>
+        <input id="quality" type="range" min="1" max="100" step="1" value="85" />
+      </section>
+
+      <section class="flex flex-col gap-2" aria-labelledby="result-title">
+        <h2 id="result-title" class="font-medium">Resultado</h2>
+        <p id="result" class="text-sm text-muted" aria-live="polite">Procesando…</p>
+        <button id="download" type="button" class="btn-primary self-start" disabled>Descargar</button>
+      </section>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .sel {
+    position: absolute;
+    border: 2px solid var(--color-accent);
+    box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.55);
+    cursor: move;
+    touch-action: none;
+  }
+  .handle {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: var(--color-accent);
+    opacity: 0.9;
+  }
+  .handle[data-handle='nw'] {
+    top: 0;
+    left: 0;
+    cursor: nwse-resize;
+  }
+  .handle[data-handle='ne'] {
+    top: 0;
+    right: 0;
+    cursor: nesw-resize;
+  }
+  .handle[data-handle='sw'] {
+    bottom: 0;
+    left: 0;
+    cursor: nesw-resize;
+  }
+  .handle[data-handle='se'] {
+    bottom: 0;
+    right: 0;
+    cursor: nwse-resize;
+  }
+  #stage {
+    touch-action: none;
+    cursor: crosshair;
+  }
+  #editor:not(.hidden) {
+    display: grid;
+  }
+  #drop.is-over {
+    border-color: var(--color-accent);
+  }
+</style>
+
+<script>
+  import {
+    applyAspect,
+    clampRect,
+    fitDimensions,
+    formatBytes,
+    outputFilename,
+    percentChange,
+    previewToNatural,
+    rectFromDrag,
+    type Point,
+    type Ratio,
+    type Rect,
+    type Size,
+  } from '../lib/image';
+
+  const MAX_SIDE = 16384;
+  const FORMATS: Record<string, { mime: string; ext: string; lossy: boolean }> = {
+    jpg: { mime: 'image/jpeg', ext: 'jpg', lossy: true },
+    png: { mime: 'image/png', ext: 'png', lossy: false },
+    webp: { mime: 'image/webp', ext: 'webp', lossy: true },
+    avif: { mime: 'image/avif', ext: 'avif', lossy: true },
+  };
+
+  const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+  const drop = $<HTMLLabelElement>('#drop');
+  const fileInput = $<HTMLInputElement>('#file');
+  const errorText = $<HTMLParagraphElement>('#error');
+  const editor = $<HTMLDivElement>('#editor');
+  const stage = $<HTMLDivElement>('#stage');
+  const preview = $<HTMLImageElement>('#preview');
+  const sel = $<HTMLDivElement>('#sel');
+  const aspectSelect = $<HTMLSelectElement>('#aspect');
+  const cropInfo = $<HTMLParagraphElement>('#crop-info');
+  const cropClear = $<HTMLButtonElement>('#crop-clear');
+  const widthInput = $<HTMLInputElement>('#width');
+  const heightInput = $<HTMLInputElement>('#height');
+  const keepInput = $<HTMLInputElement>('#keep');
+  const formatSelect = $<HTMLSelectElement>('#format');
+  const qualityInput = $<HTMLInputElement>('#quality');
+  const qualityOut = $<HTMLOutputElement>('#quality-out');
+  const resultText = $<HTMLParagraphElement>('#result');
+  const downloadBtn = $<HTMLButtonElement>('#download');
+
+  let original: File | null = null;
+  let bitmap: ImageBitmap | null = null;
+  let previewUrl = '';
+  let crop: Rect | null = null;
+  let result: { blob: Blob; ext: string } | null = null;
+  let timer = 0;
+  let run = 0;
+
+  const natural = (): Size => ({ w: bitmap!.width, h: bitmap!.height });
+  const base = (): Size => (crop ? { w: Math.round(crop.w), h: Math.round(crop.h) } : natural());
+
+  function showError(message: string) {
+    errorText.textContent = message;
+  }
+
+  function ratio(): Ratio {
+    if (!aspectSelect.value) return null;
+    const [a, b] = aspectSelect.value.split(':').map(Number);
+    return a / b;
+  }
+
+  // Los formatos con pérdida o sin soporte de escritura se detectan con un canvas mínimo.
+  async function supportsEncoding(mime: string): Promise<boolean> {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime));
+    return blob?.type === mime;
+  }
+
+  supportsEncoding('image/avif').then((ok) => {
+    if (!ok) return;
+    const option = document.createElement('option');
+    option.value = 'avif';
+    option.textContent = 'AVIF';
+    formatSelect.append(option);
+  });
+
+  function paintSelection() {
+    if (!crop || !bitmap) {
+      sel.classList.add('hidden');
+      cropClear.disabled = true;
+      cropInfo.textContent = 'Sin recorte: se usa la imagen completa.';
+      return;
+    }
+    const n = natural();
+    sel.classList.remove('hidden');
+    sel.style.left = `${(crop.x / n.w) * 100}%`;
+    sel.style.top = `${(crop.y / n.h) * 100}%`;
+    sel.style.width = `${(crop.w / n.w) * 100}%`;
+    sel.style.height = `${(crop.h / n.h) * 100}%`;
+    cropClear.disabled = false;
+    const b = base();
+    cropInfo.textContent = `Recorte: ${b.w} × ${b.h} px`;
+  }
+
+  function resetDimensions() {
+    const b = base();
+    widthInput.value = String(b.w);
+    heightInput.value = String(b.h);
+  }
+
+  function setCrop(next: Rect | null) {
+    crop = next;
+    paintSelection();
+    resetDimensions();
+    schedule();
+  }
+
+  function updateQualityState() {
+    const lossy = FORMATS[formatSelect.value].lossy;
+    qualityInput.disabled = !lossy;
+    qualityOut.textContent = lossy ? qualityInput.value : 'no aplica';
+  }
+
+  async function loadFile(file: File) {
+    showError('');
+    const name = file.name.toLowerCase();
+    const isHeic = /image\/hei[cf]/.test(file.type) || /\.hei[cf]$/.test(name);
+    if (!file.type.startsWith('image/') && !isHeic) {
+      showError('Ese archivo no es una imagen compatible.');
+      return;
+    }
+    let next: ImageBitmap;
+    try {
+      next = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch {
+      showError(
+        isHeic
+          ? 'Tu navegador no puede abrir HEIC; conviértela antes o usa Safari.'
+          : 'No se pudo abrir la imagen: puede estar dañada o ser de un formato que tu navegador no soporta.',
+      );
+      return;
+    }
+    bitmap?.close();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    bitmap = next;
+    original = file;
+    previewUrl = URL.createObjectURL(file);
+    preview.src = previewUrl;
+    crop = null;
+    aspectSelect.value = '';
+    // Por defecto se conserva el formato de origen si se puede escribir.
+    const same = Object.keys(FORMATS).find((key) => FORMATS[key].mime === file.type && key !== 'avif');
+    formatSelect.value = same ?? (file.type === 'image/avif' && [...formatSelect.options].some((o) => o.value === 'avif') ? 'avif' : 'jpg');
+    updateQualityState();
+    editor.classList.remove('hidden');
+    paintSelection();
+    resetDimensions();
+    schedule();
+  }
+
+  // --- Entrada de archivo ---
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (file) void loadFile(file);
+    fileInput.value = '';
+  });
+  drop.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    drop.classList.add('is-over');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop.addEventListener('drop', (event) => {
+    event.preventDefault();
+    drop.classList.remove('is-over');
+    const file = event.dataTransfer?.files[0];
+    if (file) void loadFile(file);
+  });
+
+  // --- Recorte con el puntero ---
+  type Drag =
+    | { mode: 'draw'; anchor: Point; started: boolean; startClient: Point }
+    | { mode: 'resize'; anchor: Point }
+    | { mode: 'move'; offset: Point };
+  let drag: Drag | null = null;
+
+  function pointFrom(event: PointerEvent): Point {
+    const box = stage.getBoundingClientRect();
+    const p = previewToNatural(
+      { x: event.clientX - box.left, y: event.clientY - box.top, w: 0, h: 0 },
+      { w: box.width, h: box.height },
+      natural(),
+    );
+    return { x: p.x, y: p.y };
+  }
+
+  stage.addEventListener('pointerdown', (event) => {
+    if (!bitmap || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const point = pointFrom(event);
+    const handle = (event.target as HTMLElement).dataset.handle;
+    if (crop && handle) {
+      const c = crop;
+      drag = {
+        mode: 'resize',
+        anchor: { x: handle.includes('w') ? c.x + c.w : c.x, y: handle.includes('n') ? c.y + c.h : c.y },
+      };
+    } else if (crop && point.x >= crop.x && point.x <= crop.x + crop.w && point.y >= crop.y && point.y <= crop.y + crop.h) {
+      drag = { mode: 'move', offset: { x: point.x - crop.x, y: point.y - crop.y } };
+    } else {
+      drag = { mode: 'draw', anchor: point, started: false, startClient: { x: event.clientX, y: event.clientY } };
+    }
+    stage.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  stage.addEventListener('pointermove', (event) => {
+    if (!drag || !bitmap) return;
+    const point = pointFrom(event);
+    const n = natural();
+    if (drag.mode === 'move' && crop) {
+      crop = clampRect({ ...crop, x: point.x - drag.offset.x, y: point.y - drag.offset.y }, n);
+    } else if (drag.mode === 'resize') {
+      crop = rectFromDrag(drag.anchor, point, ratio(), n);
+    } else if (drag.mode === 'draw') {
+      // Un clic suelto no debe crear un recorte diminuto.
+      if (!drag.started && Math.hypot(event.clientX - drag.startClient.x, event.clientY - drag.startClient.y) < 4) return;
+      drag.started = true;
+      crop = rectFromDrag(drag.anchor, point, ratio(), n);
+    }
+    paintSelection();
+  });
+
+  function endDrag() {
+    if (!drag) return;
+    const finished = drag;
+    drag = null;
+    if (finished.mode === 'draw' && !finished.started) return;
+    if (crop && (crop.w < 2 || crop.h < 2)) crop = null;
+    setCrop(crop);
+  }
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+
+  aspectSelect.addEventListener('change', () => {
+    if (crop && bitmap) setCrop(applyAspect(crop, ratio(), natural()));
+  });
+  cropClear.addEventListener('click', () => setCrop(null));
+
+  // --- Redimensionar ---
+  function onDimension(edited: 'w' | 'h') {
+    const value = Number(edited === 'w' ? widthInput.value : heightInput.value);
+    if (!Number.isFinite(value) || value < 1) return;
+    const next = fitDimensions(base(), edited, Math.min(value, MAX_SIDE), keepInput.checked, {
+      w: Number(widthInput.value),
+      h: Number(heightInput.value),
+    });
+    if (edited === 'w') heightInput.value = String(next.h);
+    else widthInput.value = String(next.w);
+    schedule();
+  }
+  widthInput.addEventListener('input', () => onDimension('w'));
+  heightInput.addEventListener('input', () => onDimension('h'));
+  keepInput.addEventListener('change', () => {
+    if (keepInput.checked) onDimension('w');
+  });
+
+  formatSelect.addEventListener('change', () => {
+    updateQualityState();
+    schedule();
+  });
+  qualityInput.addEventListener('input', () => {
+    qualityOut.textContent = qualityInput.value;
+    schedule();
+  });
+
+  // --- Procesamiento ---
+  function schedule() {
+    if (!bitmap) return;
+    result = null;
+    downloadBtn.disabled = true;
+    resultText.textContent = 'Procesando…';
+    clearTimeout(timer);
+    timer = window.setTimeout(process, 250);
+  }
+
+  function makeCanvas(w: number, h: number) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    return { canvas, ctx };
+  }
+
+  function render(source: ImageBitmap, region: Rect, target: Size, opaque: boolean): HTMLCanvasElement {
+    let src: CanvasImageSource = source;
+    let { x, y, w, h } = region;
+    // Reducir de a mitades da mejor resultado que un solo salto grande.
+    while (w > target.w * 2 || h > target.h * 2) {
+      const step = makeCanvas(Math.max(target.w, Math.ceil(w / 2)), Math.max(target.h, Math.ceil(h / 2)));
+      step.ctx.drawImage(src, x, y, w, h, 0, 0, step.canvas.width, step.canvas.height);
+      src = step.canvas;
+      x = y = 0;
+      w = step.canvas.width;
+      h = step.canvas.height;
+    }
+    const out = makeCanvas(target.w, target.h);
+    if (opaque) {
+      out.ctx.fillStyle = '#fff';
+      out.ctx.fillRect(0, 0, target.w, target.h);
+    }
+    out.ctx.drawImage(src, x, y, w, h, 0, 0, target.w, target.h);
+    return out.canvas;
+  }
+
+  async function process() {
+    if (!bitmap || !original) return;
+    const id = ++run;
+    const target = { w: Math.round(Number(widthInput.value)), h: Math.round(Number(heightInput.value)) };
+    if (!(target.w >= 1 && target.h >= 1) || target.w > MAX_SIDE || target.h > MAX_SIDE) {
+      resultText.textContent = `Ancho y alto deben estar entre 1 y ${MAX_SIDE} px.`;
+      return;
+    }
+    const n = natural();
+    const c = crop;
+    const region = c
+      ? (() => {
+          const x = Math.min(Math.round(c.x), n.w - 1);
+          const y = Math.min(Math.round(c.y), n.h - 1);
+          return { x, y, w: Math.max(1, Math.min(Math.round(c.w), n.w - x)), h: Math.max(1, Math.min(Math.round(c.h), n.h - y)) };
+        })()
+      : { x: 0, y: 0, w: n.w, h: n.h };
+
+    const format = FORMATS[formatSelect.value];
+    try {
+      const canvas = render(bitmap, region, target, format.mime === 'image/jpeg');
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, format.mime, format.lossy ? Number(qualityInput.value) / 100 : undefined),
+      );
+      if (id !== run) return;
+      if (!blob || blob.type !== format.mime) {
+        resultText.textContent = `Tu navegador no puede exportar a ${format.ext.toUpperCase()}; elige otro formato.`;
+        return;
+      }
+      result = { blob, ext: format.ext };
+      const change = percentChange(original.size, blob.size);
+      const sign = change > 0 ? '+' : change < 0 ? '−' : '';
+      resultText.textContent = `${target.w} × ${target.h} px · ${formatBytes(blob.size)} (original: ${formatBytes(original.size)}, ${sign}${Math.abs(change)} %)`;
+      downloadBtn.disabled = false;
+    } catch {
+      if (id === run) resultText.textContent = 'No se pudo procesar la imagen. Prueba con un tamaño menor.';
+    }
+  }
+
+  downloadBtn.addEventListener('click', () => {
+    if (!result || !original) return;
+    const url = URL.createObjectURL(result.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = outputFilename(original.name, result.ext);
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  updateQualityState();
+</script>

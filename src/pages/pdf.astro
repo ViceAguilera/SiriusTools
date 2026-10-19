@@ -1,0 +1,319 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="PDF">
+  <h1 class="text-xl font-semibold">PDF</h1>
+  <p class="mt-1 text-sm text-muted">Todo se procesa en tu navegador; los archivos no se suben a ningún lado.</p>
+
+  <div class="mt-6 flex flex-wrap gap-2" role="group" aria-label="Modo">
+    <button type="button" class="btn tab" data-mode="merge" aria-pressed="true">Unir</button>
+    <button type="button" class="btn tab" data-mode="extract" aria-pressed="false">Extraer páginas</button>
+    <button type="button" class="btn tab" data-mode="reorder" aria-pressed="false">Reordenar</button>
+  </div>
+
+  <p id="error" role="alert" class="mt-4 min-h-5 text-sm text-danger"></p>
+
+  <section class="card mt-2 space-y-4" data-panel="merge">
+    <div id="merge-drop" class="drop rounded-lg border border-dashed border-line p-6 text-center">
+      <p class="text-sm text-muted">Arrastra PDFs aquí o</p>
+      <label for="merge-input" class="btn mt-2 cursor-pointer">Elegir PDFs</label>
+      <input id="merge-input" type="file" accept="application/pdf,.pdf" multiple class="sr-only" />
+    </div>
+    <ul id="merge-list" class="space-y-2"></ul>
+    <button type="button" id="merge-run" class="btn-primary" disabled>Unir y descargar</button>
+  </section>
+
+  <section class="card mt-2 hidden space-y-4" data-panel="extract">
+    <div>
+      <label for="extract-file" class="label">PDF</label>
+      <input id="extract-file" type="file" accept="application/pdf,.pdf" class="input mt-1" />
+      <p id="extract-info" class="mt-1 text-sm text-muted"></p>
+    </div>
+    <div>
+      <label for="extract-spec" class="label">Páginas o rangos</label>
+      <input id="extract-spec" type="text" class="input mt-1" placeholder="1-3, 5, 8-" autocomplete="off" spellcheck="false" />
+      <p class="mt-1 text-sm text-muted">"8-" significa hasta el final.</p>
+    </div>
+    <fieldset class="space-y-1">
+      <legend class="label">Salida</legend>
+      <label class="flex items-center gap-2 text-sm"><input type="radio" name="extract-out" value="single" checked /> Un solo PDF</label>
+      <label class="flex items-center gap-2 text-sm"><input type="radio" name="extract-out" value="each" /> Un PDF por rango</label>
+    </fieldset>
+    <button type="button" id="extract-run" class="btn-primary" disabled>Extraer y descargar</button>
+  </section>
+
+  <section class="card mt-2 hidden space-y-4" data-panel="reorder">
+    <div>
+      <label for="reorder-file" class="label">PDF</label>
+      <input id="reorder-file" type="file" accept="application/pdf,.pdf" class="input mt-1" />
+      <p id="reorder-info" class="mt-1 text-sm text-muted"></p>
+    </div>
+    <div>
+      <label for="reorder-spec" class="label">Nuevo orden</label>
+      <input id="reorder-spec" type="text" class="input mt-1" placeholder="3,1,2,4-6" autocomplete="off" spellcheck="false" />
+      <p class="mt-1 text-sm text-muted">Las páginas que omitas se eliminan y las que repitas se duplican.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" id="reorder-reverse" class="btn" disabled>Invertir orden</button>
+      <button type="button" id="reorder-run" class="btn-primary" disabled>Reordenar y descargar</button>
+    </div>
+  </section>
+</Layout>
+
+<style is:global>
+  .tab[aria-pressed='true'] {
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+  .drop.is-over {
+    border-color: var(--color-accent);
+    background: var(--color-surface-2);
+  }
+  #merge-input:focus-visible + * {
+    outline: 2px solid var(--color-accent);
+  }
+</style>
+
+<script>
+  import type { PDFDocument } from 'pdf-lib';
+  import { outputName, parsePageSpec, specTokens, splitRanges } from '../lib/pages';
+
+  // pdf-lib pesa ~400 KB: se baja recién al elegir el primer PDF, así la página abre al instante.
+  const pdfLib = () => import('pdf-lib');
+
+  const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+  const errorBox = $<HTMLParagraphElement>('#error');
+
+  function showError(message: string) {
+    errorBox.textContent = message;
+  }
+
+  // Cada modo conserva su propio estado; solo se muestra el panel activo.
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('.tab')];
+  tabs.forEach((tab) =>
+    tab.addEventListener('click', () => {
+      showError('');
+      tabs.forEach((t) => t.setAttribute('aria-pressed', String(t === tab)));
+      document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
+        panel.classList.toggle('hidden', panel.dataset.panel !== tab.dataset.mode);
+      });
+    }),
+  );
+
+  interface Loaded {
+    name: string;
+    doc: PDFDocument;
+    pages: number;
+  }
+
+  async function loadPdf(file: File): Promise<Loaded> {
+    try {
+      const { PDFDocument } = await pdfLib();
+      const doc = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: false });
+      return { name: file.name, doc, pages: doc.getPageCount() };
+    } catch (error) {
+      if (error instanceof (await pdfLib()).EncryptedPDFError) throw new Error(`"${file.name}": el PDF tiene contraseña; quítasela antes.`);
+      throw new Error(`"${file.name}" no se pudo leer; puede estar dañado o no ser un PDF.`);
+    }
+  }
+
+  function download(bytes: Uint8Array, filename: string) {
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function buildPdf(source: PDFDocument, indices: number[]): Promise<Uint8Array> {
+    const out = await (await pdfLib()).PDFDocument.create();
+    for (const page of await out.copyPages(source, indices)) out.addPage(page);
+    return out.save();
+  }
+
+  const pageLabel = (n: number) => `${n} ${n === 1 ? 'página' : 'páginas'}`;
+  const isPdf = (file: File) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+
+  async function run(button: HTMLButtonElement, task: () => Promise<void>) {
+    showError('');
+    button.disabled = true;
+    try {
+      await task();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Ocurrió un error inesperado.');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  // ---- Unir ----
+  const mergeInput = $<HTMLInputElement>('#merge-input');
+  const mergeDrop = $<HTMLDivElement>('#merge-drop');
+  const mergeList = $<HTMLUListElement>('#merge-list');
+  const mergeRun = $<HTMLButtonElement>('#merge-run');
+  const mergeItems: Loaded[] = [];
+
+  function renderMerge(focus?: { index: number; action: 'up' | 'down' }) {
+    mergeList.replaceChildren(
+      ...mergeItems.map((item, i) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2';
+        const name = document.createElement('span');
+        name.className = 'min-w-0 flex-1 truncate text-sm';
+        name.textContent = item.name;
+        name.title = item.name;
+        const count = document.createElement('span');
+        count.className = 'shrink-0 text-xs text-muted';
+        count.textContent = pageLabel(item.pages);
+        li.append(name, count);
+        const actions: Array<[string, string, string, boolean, () => void]> = [
+          ['up', '↑', `Subir ${item.name}`, i === 0, () => move(i, -1)],
+          ['down', '↓', `Bajar ${item.name}`, i === mergeItems.length - 1, () => move(i, 1)],
+          ['remove', '✕', `Quitar ${item.name}`, false, () => remove(i)],
+        ];
+        for (const [action, text, label, disabled, handler] of actions) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn !px-2.5 !py-1';
+          button.textContent = text;
+          button.setAttribute('aria-label', label);
+          button.dataset.action = action;
+          button.disabled = disabled;
+          button.addEventListener('click', handler);
+          li.append(button);
+        }
+        return li;
+      }),
+    );
+    mergeRun.disabled = mergeItems.length < 2;
+    if (focus) {
+      const li = mergeList.children[focus.index];
+      // Si el botón quedó deshabilitado (llegó a un extremo), el foco pasa a "quitar" para no perderlo.
+      const target = li?.querySelector<HTMLButtonElement>(`[data-action="${focus.action}"]`);
+      (target && !target.disabled ? target : li?.querySelector<HTMLButtonElement>('[data-action="remove"]'))?.focus();
+    }
+  }
+
+  function move(index: number, delta: -1 | 1) {
+    const to = index + delta;
+    [mergeItems[index], mergeItems[to]] = [mergeItems[to], mergeItems[index]];
+    renderMerge({ index: to, action: delta < 0 ? 'up' : 'down' });
+  }
+
+  function remove(index: number) {
+    mergeItems.splice(index, 1);
+    renderMerge();
+    mergeInput.focus();
+  }
+
+  async function addMergeFiles(files: File[]) {
+    showError('');
+    const errors: string[] = [];
+    for (const file of files) {
+      if (!isPdf(file)) {
+        errors.push(`"${file.name}" no es un PDF.`);
+        continue;
+      }
+      try {
+        mergeItems.push(await loadPdf(file));
+      } catch (error) {
+        errors.push((error as Error).message);
+      }
+    }
+    renderMerge();
+    if (errors.length) showError(errors.join(' '));
+  }
+
+  mergeInput.addEventListener('change', () => {
+    void addMergeFiles([...(mergeInput.files ?? [])]);
+    mergeInput.value = '';
+  });
+  mergeDrop.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    mergeDrop.classList.add('is-over');
+  });
+  mergeDrop.addEventListener('dragleave', () => mergeDrop.classList.remove('is-over'));
+  mergeDrop.addEventListener('drop', (event) => {
+    event.preventDefault();
+    mergeDrop.classList.remove('is-over');
+    void addMergeFiles([...(event.dataTransfer?.files ?? [])]);
+  });
+  mergeRun.addEventListener('click', () =>
+    run(mergeRun, async () => {
+      const out = await (await pdfLib()).PDFDocument.create();
+      for (const item of mergeItems) {
+        for (const page of await out.copyPages(item.doc, item.doc.getPageIndices())) out.addPage(page);
+      }
+      download(await out.save(), 'unido.pdf');
+    }),
+  );
+
+  // ---- Extraer y reordenar comparten la carga de un solo archivo ----
+  function singleFileMode(prefix: 'extract' | 'reorder') {
+    const input = $<HTMLInputElement>(`#${prefix}-file`);
+    const info = $<HTMLParagraphElement>(`#${prefix}-info`);
+    const spec = $<HTMLInputElement>(`#${prefix}-spec`);
+    const runButton = $<HTMLButtonElement>(`#${prefix}-run`);
+    const reverse = document.querySelector<HTMLButtonElement>(`#${prefix}-reverse`);
+    const state: { loaded: Loaded | null } = { loaded: null };
+
+    input.addEventListener('change', async () => {
+      showError('');
+      state.loaded = null;
+      info.textContent = '';
+      runButton.disabled = true;
+      if (reverse) reverse.disabled = true;
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        if (!isPdf(file)) throw new Error(`"${file.name}" no es un PDF.`);
+        state.loaded = await loadPdf(file);
+        info.textContent = `${file.name} · ${pageLabel(state.loaded.pages)}`;
+        runButton.disabled = false;
+        if (reverse) reverse.disabled = false;
+      } catch (error) {
+        showError((error as Error).message);
+      }
+    });
+    return { state, spec, runButton, reverse };
+  }
+
+  // ---- Extraer ----
+  const extract = singleFileMode('extract');
+  extract.runButton.addEventListener('click', () =>
+    run(extract.runButton, async () => {
+      const loaded = extract.state.loaded!;
+      const spec = extract.spec.value;
+      const each = document.querySelector<HTMLInputElement>('input[name="extract-out"]:checked')!.value === 'each';
+      if (!each) {
+        download(await buildPdf(loaded.doc, parsePageSpec(spec, loaded.pages)), outputName(loaded.name, 'paginas'));
+        return;
+      }
+      const groups = splitRanges(spec, loaded.pages);
+      const labels = specTokens(spec);
+      for (let i = 0; i < groups.length; i++) {
+        download(await buildPdf(loaded.doc, groups[i]), outputName(loaded.name, labels[i]));
+        // Los navegadores pueden bloquear descargas simultáneas; se espacian.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    }),
+  );
+
+  // ---- Reordenar ----
+  const reorder = singleFileMode('reorder');
+  reorder.reverse!.addEventListener('click', () => {
+    const total = reorder.state.loaded?.pages ?? 0;
+    reorder.spec.value = Array.from({ length: total }, (_, i) => total - i).join(',');
+    reorder.spec.focus();
+  });
+  reorder.runButton.addEventListener('click', () =>
+    run(reorder.runButton, async () => {
+      const loaded = reorder.state.loaded!;
+      download(await buildPdf(loaded.doc, parsePageSpec(reorder.spec.value, loaded.pages)), outputName(loaded.name, 'reordenado'));
+    }),
+  );
+</script>
