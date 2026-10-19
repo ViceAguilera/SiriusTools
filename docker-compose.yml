@@ -4,6 +4,10 @@ services:
     env_file: .env
     environment:
       YTDLP_POT_URL: http://pot:4416
+      YTDLP_COOKIES: /run/secrets/youtube-cookies.txt
+    # Cookies de YouTube (opcionales): ./secrets/youtube-cookies.txt en el VPS, fuera de git y de la imagen.
+    volumes:
+      - ./secrets:/run/secrets:ro
     depends_on:
       - pot
     ports:

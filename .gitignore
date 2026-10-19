@@ -26,6 +26,9 @@ pnpm-debug.log*
 # local
 .claude/
 
+# cookies de YouTube del VPS
+secrets/
+
 # documentación personal (datos del VPS)
 DESPLIEGUE.md
 ROADMAP.md

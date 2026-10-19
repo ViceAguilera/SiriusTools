@@ -1,8 +1,8 @@
 // Descargas de YouTube en el servidor: cola en memoria, un proceso yt-dlp por trabajo y limpieza automática.
-import { YTDLP_PATH, YTDLP_POT_URL } from 'astro:env/server';
+import { YTDLP_COOKIES, YTDLP_PATH, YTDLP_POT_URL } from 'astro:env/server';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -22,6 +22,7 @@ export interface Job {
 }
 
 const ROOT = join(tmpdir(), 'tools-yt');
+const COOKIES_FILE = 'cookies.txt';
 const MAX_RUNNING = 2;
 const TIMEOUT_MS = 15 * 60 * 1000;
 // Tiempo que el archivo queda disponible para bajarlo después de terminar.
@@ -92,11 +93,16 @@ function run(job: Job, url: string, format: Format): Promise<void> {
   const dir = join(ROOT, job.id);
   mkdirSync(dir, { recursive: true });
   job.status = 'downloading';
+  // Copia por trabajo: yt-dlp reescribe el archivo de cookies al terminar y dos descargas a la vez lo pisarían.
+  // El original va montado de solo lectura.
+  const cookies = YTDLP_COOKIES && existsSync(YTDLP_COOKIES) ? join(dir, COOKIES_FILE) : undefined;
+  if (cookies) copyFileSync(YTDLP_COOKIES!, cookies);
 
   return new Promise((resolve) => {
     let lastError = '';
     let skipped = false;
-    const child = spawn(YTDLP_PATH, buildArgs(url, format, dir, YTDLP_POT_URL), { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const args = buildArgs(url, format, dir, { potUrl: YTDLP_POT_URL, cookies });
+    const child = spawn(YTDLP_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const timer = setTimeout(() => child.kill('SIGKILL'), TIMEOUT_MS);
 
     const onLine = (line: string) => {
@@ -117,6 +123,7 @@ function run(job: Job, url: string, format: Format): Promise<void> {
 
     child.on('close', (code) => {
       clearTimeout(timer);
+      if (cookies) rmSync(cookies, { force: true });
       const file = code === 0 ? findOutput(dir) : undefined;
       if (file) {
         finish(job, { status: 'done', percent: 100, filePath: join(dir, file), fileName: file, size: statSync(join(dir, file)).size });

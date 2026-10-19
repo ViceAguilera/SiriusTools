@@ -21,6 +21,8 @@ export default defineConfig({
       YTDLP_PATH: envField.string({ context: 'server', access: 'secret', default: 'yt-dlp' }),
       // Generador de tokens PO (bgutil). Sin definir: yt-dlp va sin tokens.
       YTDLP_POT_URL: envField.string({ context: 'server', access: 'secret', optional: true, url: true }),
+      // Ruta a un cookies.txt de una cuenta de YouTube. Si no existe el archivo, se descarga sin cookies.
+      YTDLP_COOKIES: envField.string({ context: 'server', access: 'secret', optional: true }),
     }
   },
 
