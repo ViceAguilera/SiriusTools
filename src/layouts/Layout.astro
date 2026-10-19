@@ -34,6 +34,25 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
     {
       nav ? (
         <div class="app">
+          <div class="content">
+            <header class="topbar">
+              <a href="/youtube" class="text-sm text-muted hover:text-text">
+                sirius/tools
+              </a>
+              <div class="flex items-center gap-3">
+                <form method="post" action="/salir" class="topbar-exit">
+                  <button class="text-sm text-muted hover:text-text">salir</button>
+                </form>
+                <ThemeToggle />
+                <Queue />
+              </div>
+            </header>
+            <main id="contenido" class="mx-auto w-full max-w-4xl px-4 pt-4 pb-10">
+              <slot />
+            </main>
+          </div>
+
+          {/* Después del contenido: el riel va a la derecha y así el orden del teclado sigue al visual. */}
           <nav class="rail" aria-label="Herramientas">
             <a href="/youtube" class="rail-logo" aria-label="Inicio">
               &gt;_
@@ -66,24 +85,6 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
               </button>
             </form>
           </nav>
-
-          <div class="content">
-            <header class="topbar">
-              <a href="/youtube" class="text-sm text-muted hover:text-text">
-                sirius/tools
-              </a>
-              <div class="flex items-center gap-3">
-                <form method="post" action="/salir" class="topbar-exit">
-                  <button class="text-sm text-muted hover:text-text">salir</button>
-                </form>
-                <ThemeToggle />
-                <Queue />
-              </div>
-            </header>
-            <main id="contenido" class="mx-auto w-full max-w-4xl px-4 pt-4 pb-10">
-              <slot />
-            </main>
-          </div>
         </div>
       ) : (
         <div class="flex justify-end px-5 pt-4">
@@ -142,7 +143,7 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
     padding: 18px 8px;
     box-sizing: border-box;
     background: var(--color-surface);
-    border-right: 1px solid var(--color-line);
+    border-left: 1px solid var(--color-line);
   }
   .rail-logo {
     font-size: 22px;
