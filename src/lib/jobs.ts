@@ -2,7 +2,7 @@
 import { YTDLP_COOKIES, YTDLP_PATH, YTDLP_POT_URL } from 'astro:env/server';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -93,10 +93,7 @@ function run(job: Job, url: string, format: Format): Promise<void> {
   const dir = join(ROOT, job.id);
   mkdirSync(dir, { recursive: true });
   job.status = 'downloading';
-  // Copia por trabajo: yt-dlp reescribe el archivo de cookies al terminar y dos descargas a la vez lo pisarían.
-  // El original va montado de solo lectura.
-  const cookies = YTDLP_COOKIES && existsSync(YTDLP_COOKIES) ? join(dir, COOKIES_FILE) : undefined;
-  if (cookies) copyFileSync(YTDLP_COOKIES!, cookies);
+  const cookies = copyCookies(dir);
 
   return new Promise((resolve) => {
     let lastError = '';
@@ -142,6 +139,24 @@ function run(job: Job, url: string, format: Format): Promise<void> {
       resolve();
     });
   });
+}
+
+/**
+ * Copia por trabajo: yt-dlp reescribe el archivo de cookies al terminar y dos descargas a la vez lo pisarían.
+ * El original va montado de solo lectura.
+ */
+function copyCookies(dir: string): string | undefined {
+  if (!YTDLP_COOKIES) return undefined;
+  const target = join(dir, COOKIES_FILE);
+  try {
+    copyFileSync(YTDLP_COOKIES, target);
+    return target;
+  } catch (error) {
+    // Sin archivo es normal (las cookies son opcionales); un problema de permisos tiene que verse en los logs.
+    const { code, message } = error as NodeJS.ErrnoException;
+    if (code !== 'ENOENT') console.error('[yt] no se pudieron leer las cookies:', message);
+    return undefined;
+  }
 }
 
 /** El archivo final: lo que quede en la carpeta que no sea temporal de yt-dlp. */
