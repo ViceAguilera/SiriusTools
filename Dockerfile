@@ -14,7 +14,7 @@ FROM node:24-alpine
 # bgutil-ytdlp-pot-provider pide tokens PO al contenedor bgutil cuando YTDLP_POT_URL está definida.
 RUN apk add --no-cache python3 ffmpeg \
   && python3 -m venv /opt/yt-dlp \
-  && /opt/yt-dlp/bin/pip install --no-cache-dir 'yt-dlp[default]' bgutil-ytdlp-pot-provider
+  && /opt/yt-dlp/bin/pip install --no-cache-dir 'yt-dlp[default]' bgutil-ytdlp-pot-provider==2.0.2
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=9002 YTDLP_PATH=/opt/yt-dlp/bin/yt-dlp
 COPY --from=build --chown=node:node /app/dist ./dist
