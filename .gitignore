@@ -25,6 +25,8 @@ pnpm-debug.log*
 
 # local
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # cookies de YouTube del VPS
 secrets/
