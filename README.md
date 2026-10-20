@@ -111,7 +111,7 @@ La aplicación queda en `127.0.0.1:9002`, solo accesible desde el propio servido
 - Todo el sitio va detrás de la clave (`src/middleware.ts`); las APIs responden 401 sin sesión.
 - Máximo 5 intentos fallidos por IP cada 15 minutos, reforzado con una regla de Cloudflare.
 - El descargador solo acepta videos de YouTube: rearma la URL a partir del ID, así `yt-dlp` no puede pedir otras direcciones (ni servicios internos del servidor). Máximo 2 descargas a la vez, 20 en cola, 30 por hora por IP, 3 h y 2 GB por video, y 10 GB guardados en total.
-- CSP con hashes (`security.csp` de Astro, solo en build) y cabeceras de seguridad: `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` y COOP. Por la CSP no hay scripts inline: lo que deba correr antes de pintar va en `public/` (ver `theme-init.js`).
+- CSP con hashes (`security.csp` de Astro, solo en build) y cabeceras de seguridad: `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` y COOP. Por la CSP no hay scripts inline: lo que deba correr antes de pintar va en `src/scripts/` y se carga con `?url&no-inline` (ver `Layout.astro`). La única excepción son las reglas de precarga del riel, cuyo hash se agrega en `astro.config.mjs`.
 - Contenedor sin capacidades, con `no-new-privileges`, 1 GB de memoria y 200 procesos como tope.
 
 ## Privacidad y rendimiento
@@ -131,8 +131,9 @@ src/
   components/       # Cola de descargas, aviso de cookies, selector de tema
   layouts/          # Layout común
   config/tools.ts   # Lista de herramientas del menú
+  scripts/          # Tema y transiciones (corren antes de pintar) y fondo de letras de la entrada
   middleware.ts     # Control de acceso y cabeceras de seguridad
-public/             # favicon, robots.txt y theme-init.js
+public/             # favicon y robots.txt
 docs/               # Capturas para el README
 Dockerfile          # Build en dos etapas con yt-dlp y ffmpeg
 docker-compose.yml  # Servicio endurecido en 127.0.0.1:9002
