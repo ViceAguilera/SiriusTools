@@ -34,9 +34,9 @@ const { class: className } = Astro.props;
     :root:not([data-theme='dark']) .theme-moon { display: block; }
   }
 
-  /* Cambio de tema: fundido de toda la página con View Transitions. */
-  ::view-transition-old(root),
-  ::view-transition-new(root) { animation-duration: 0.55s; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  /* Cambio de tema: fundido de toda la página con View Transitions (incluye el riel y la barra, que tienen nombre propio). */
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation-duration: 0.55s; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
   /* Respaldo sin View Transitions: los colores se interpolan mientras dura la clase. */
   html.theme-fading,
   html.theme-fading *,

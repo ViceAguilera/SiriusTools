@@ -134,6 +134,81 @@ body {
   outline: none;
 }
 
+/*
+ * Transiciones entre páginas (View Transitions entre documentos). public/transitions.js elige el tipo:
+ * nav-forward / nav-back al cambiar de herramienta (según su orden en el riel), unlock al entrar, nav el resto.
+ * El riel y la barra superior quedan quietos; solo se mueve el contenido.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+.rail {
+  view-transition-name: rail;
+}
+.topbar {
+  view-transition-name: topbar;
+}
+:root {
+  --vt-dx: 0px;
+  --vt-dy: 14px;
+  --vt-dir: 1;
+}
+/* En el celular las herramientas van en una barra horizontal: el contenido entra de lado. */
+@media (max-width: 767px) {
+  :root {
+    --vt-dx: 20px;
+    --vt-dy: 0px;
+  }
+}
+html:active-view-transition-type(nav-back) {
+  --vt-dir: -1;
+}
+html:active-view-transition-type(nav, nav-forward, nav-back)::view-transition-old(root) {
+  animation: 0.16s cubic-bezier(0.4, 0, 1, 1) both vt-out;
+}
+html:active-view-transition-type(nav, nav-forward, nav-back)::view-transition-new(root) {
+  animation: 0.32s 0.06s cubic-bezier(0.2, 0, 0, 1) both vt-in;
+}
+html:active-view-transition-type(nav)::view-transition-old(root),
+html:active-view-transition-type(nav)::view-transition-new(root) {
+  --vt-dir: 0;
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+    transform: translate(calc(var(--vt-dx) * var(--vt-dir) * -1), calc(var(--vt-dy) * var(--vt-dir) * -1));
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translate(calc(var(--vt-dx) * var(--vt-dir)), calc(var(--vt-dy) * var(--vt-dir)));
+  }
+}
+
+/* Al entrar: la explosión de entrar.astro tapa la pantalla y la herramienta se abre paso en un círculo que crece
+   desde el candado. El riel y la barra entran con la página (sin nombre propio no quedan fuera del círculo). */
+html:active-view-transition-type(unlock) .rail,
+html:active-view-transition-type(unlock) .topbar {
+  view-transition-name: none;
+}
+html:active-view-transition-type(unlock)::view-transition-old(root) {
+  animation: none;
+}
+html:active-view-transition-type(unlock)::view-transition-new(root) {
+  animation: 0.7s cubic-bezier(0.65, 0, 0.25, 1) both vt-reveal;
+}
+@keyframes vt-reveal {
+  from {
+    clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 40%));
+  }
+  to {
+    clip-path: circle(150vmax at var(--vt-x, 50%) var(--vt-y, 40%));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
