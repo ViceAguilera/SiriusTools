@@ -11,7 +11,10 @@ Suite web personal de herramientas (descargador de YouTube, imágenes, PDF, QR y
 
 [Sitio](https://tools.iamsirius.cl)
 
-<p align="center"><img src="docs/screenshot.png" alt="Pantalla del descargador de YouTube de Sirius Tools" width="800"></p>
+<p align="center">
+  <img src="docs/entrar.png" alt="Pantalla de entrada con clave de Sirius Tools" width="49%">
+  <img src="docs/screenshot.png" alt="Pantalla del descargador de YouTube de Sirius Tools" width="49%">
+</p>
 
 ## Tabla de contenidos
 
