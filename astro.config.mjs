@@ -1,5 +1,7 @@
 // @ts-check
+import { createHash } from 'node:crypto';
 import { defineConfig, envField } from 'astro/config';
+import { speculationRules } from './src/config/speculation.mjs';
 
 import node from '@astrojs/node';
 import tailwindcss from '@tailwindcss/vite';
@@ -43,6 +45,10 @@ export default defineConfig({
         "base-uri 'self'",
         "form-action 'self'",
       ],
+      // Hash de las reglas de precarga del riel (src/config/speculation.mjs), que van inline en Layout.astro.
+      scriptDirective: {
+        hashes: [`sha256-${createHash('sha256').update(speculationRules).digest('base64')}`],
+      },
     },
   },
 

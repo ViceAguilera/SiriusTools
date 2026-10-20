@@ -4,7 +4,12 @@ import Queue from '../components/Queue.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import CookieNotice from '../components/CookieNotice.astro';
 import fontRegular from '../fonts/ibm-plex-mono-400.woff2?url';
+// Scripts que corren antes de pintar. Con ?url salen a /_astro/ con hash y se guardan un año (Nginx): en public/
+// el navegador los revalidaba en cada cambio de herramienta, y eso retrasaba la página.
+import themeInit from '../scripts/theme-init.js?url&no-inline';
+import transitions from '../scripts/transitions.js?url&no-inline';
 import { tools } from '../config/tools';
+import { speculationRules } from '../config/speculation.mjs';
 
 interface Props {
   title: string;
@@ -27,8 +32,10 @@ const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <title>{`${title} · tools`}</title>
-    <script is:inline src="/theme-init.js"></script>
-    <script is:inline src="/transitions.js"></script>
+    <script is:inline src={themeInit}></script>
+    <script is:inline src={transitions}></script>
+    {/* La precarga de Astro no sirve aquí: las páginas van con Cache-Control no-cache y se volvían a pedir. */}
+    <script is:inline type="speculationrules" set:html={speculationRules} />
   </head>
   <body class="min-h-dvh antialiased">
     <a href="#contenido" class="skip-link">saltar al contenido</a>

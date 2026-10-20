@@ -135,64 +135,14 @@ body {
 }
 
 /*
- * Transiciones entre páginas (View Transitions entre documentos). public/transitions.js elige el tipo:
- * nav-forward / nav-back al cambiar de herramienta (según su orden en el riel), unlock al entrar, nav el resto.
- * El riel y la barra superior quedan quietos; solo se mueve el contenido.
+ * Transiciones entre páginas. src/scripts/transitions.js elige el tipo según de dónde se viene.
+ * Al entrar (unlock): View Transition entre documentos. La explosión de entrar.astro tapa la pantalla y la
+ * herramienta se abre paso en un círculo que crece desde el candado.
  */
 @media (prefers-reduced-motion: no-preference) {
   @view-transition {
     navigation: auto;
   }
-}
-.rail {
-  view-transition-name: rail;
-}
-.topbar {
-  view-transition-name: topbar;
-}
-:root {
-  --vt-dx: 0px;
-  --vt-dy: 14px;
-  --vt-dir: 1;
-}
-/* En el celular las herramientas van en una barra horizontal: el contenido entra de lado. */
-@media (max-width: 767px) {
-  :root {
-    --vt-dx: 20px;
-    --vt-dy: 0px;
-  }
-}
-html:active-view-transition-type(nav-back) {
-  --vt-dir: -1;
-}
-html:active-view-transition-type(nav, nav-forward, nav-back)::view-transition-old(root) {
-  animation: 0.16s cubic-bezier(0.4, 0, 1, 1) both vt-out;
-}
-html:active-view-transition-type(nav, nav-forward, nav-back)::view-transition-new(root) {
-  animation: 0.32s 0.06s cubic-bezier(0.2, 0, 0, 1) both vt-in;
-}
-html:active-view-transition-type(nav)::view-transition-old(root),
-html:active-view-transition-type(nav)::view-transition-new(root) {
-  --vt-dir: 0;
-}
-@keyframes vt-out {
-  to {
-    opacity: 0;
-    transform: translate(calc(var(--vt-dx) * var(--vt-dir) * -1), calc(var(--vt-dy) * var(--vt-dir) * -1));
-  }
-}
-@keyframes vt-in {
-  from {
-    opacity: 0;
-    transform: translate(calc(var(--vt-dx) * var(--vt-dir)), calc(var(--vt-dy) * var(--vt-dir)));
-  }
-}
-
-/* Al entrar: la explosión de entrar.astro tapa la pantalla y la herramienta se abre paso en un círculo que crece
-   desde el candado. El riel y la barra entran con la página (sin nombre propio no quedan fuera del círculo). */
-html:active-view-transition-type(unlock) .rail,
-html:active-view-transition-type(unlock) .topbar {
-  view-transition-name: none;
 }
 html:active-view-transition-type(unlock)::view-transition-old(root) {
   animation: none;
@@ -206,6 +156,36 @@ html:active-view-transition-type(unlock)::view-transition-new(root) {
   }
   to {
     clip-path: circle(150vmax at var(--vt-x, 50%) var(--vt-y, 40%));
+  }
+}
+
+/* Al cambiar de herramienta: sin View Transition (agrega espera); el contenido entra desde el primer cuadro, en la
+   dirección del riel. El riel y la barra superior no se mueven. */
+:root {
+  --enter-dx: 0px;
+  --enter-dy: 10px;
+  --enter-dir: 1;
+}
+/* En el celular las herramientas van en una barra horizontal: el contenido entra de lado. */
+@media (max-width: 767px) {
+  :root {
+    --enter-dx: 16px;
+    --enter-dy: 0px;
+  }
+}
+html[data-enter='nav-back'] {
+  --enter-dir: -1;
+}
+html[data-enter='nav'] {
+  --enter-dir: 0;
+}
+html[data-enter] #contenido {
+  animation: 0.22s cubic-bezier(0.2, 0, 0, 1) both content-enter;
+}
+@keyframes content-enter {
+  from {
+    opacity: 0;
+    transform: translate(calc(var(--enter-dx) * var(--enter-dir)), calc(var(--enter-dy) * var(--enter-dir)));
   }
 }
 
