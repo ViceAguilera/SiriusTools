@@ -35,8 +35,10 @@ if (Astro.request.method === 'POST') {
 
 <Layout title="Entrar" nav={false}>
   <div class="flex min-h-[70dvh] flex-col items-center justify-center text-center">
-    <svg id="lock" class="lock" viewBox="0 0 64 72" width="72" height="80" aria-hidden="true">
-      <path class="lock-shackle" d="M18 32V22a14 14 0 0 1 28 0v10" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"></path>
+    {/* El viewBox deja aire arriba para que el arco abierto no se corte. Las patas siguen por dentro del cuerpo:
+        al levantarse, la del pivote no se despega. */}
+    <svg id="lock" class="lock" viewBox="0 -12 64 84" width="72" height="94" aria-hidden="true">
+      <path class="lock-shackle" d="M18 42V22a14 14 0 0 1 28 0v20" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"></path>
       <rect class="lock-body" x="8" y="30" width="48" height="38" rx="8" fill="currentColor"></rect>
       <circle cx="32" cy="47" r="5" fill="var(--color-bg)"></circle>
       <rect x="30" y="49" width="4" height="9" rx="2" fill="var(--color-bg)"></rect>
@@ -70,6 +72,14 @@ if (Astro.request.method === 'POST') {
       <noscript><button class="btn-primary">Entrar</button></noscript>
     </form>
   </div>
+
+  {/* Explosión al entrar: nace en el candado y tapa la pantalla; la herramienta aparece abriéndose desde ahí. */}
+  <div id="burst" class="burst" aria-hidden="true">
+    <span class="burst-disc"></span>
+    <span class="burst-ring"></span>
+    <span class="burst-ring"></span>
+    {Array.from({ length: 10 }, () => <span class="burst-spark" />)}
+  </div>
 </Layout>
 
 <style is:global>
@@ -78,22 +88,91 @@ if (Astro.request.method === 'POST') {
     transition: color 0.3s ease;
   }
   .lock-shackle {
-    transform-origin: 46px 32px;
-    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-box: view-box;
+    transform-origin: 18px 42px; /* pie de la pata izquierda: el arco sube y gira sobre ella */
   }
   .lock.is-open {
     color: var(--color-ok);
   }
   .lock.is-open .lock-shackle {
-    transform: translateY(-6px) rotate(28deg);
+    animation: shackle-open 0.6s forwards;
   }
-  .lock.is-leaving {
-    animation: lock-out 0.4s 0.35s ease-in forwards;
+  @keyframes shackle-open {
+    0% {
+      transform: none;
+      animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+    }
+    35% {
+      transform: translateY(-9px);
+      animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    100% {
+      transform: translateY(-9px) rotate(-35deg);
+    }
   }
-  @keyframes lock-out {
+  .burst {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    overflow: hidden;
+    pointer-events: none;
+    display: none;
+  }
+  .burst.is-on {
+    display: block;
+  }
+  .burst > span {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    border-radius: 50%;
+  }
+  .burst-disc {
+    width: 300vmax;
+    height: 300vmax;
+    margin: -150vmax 0 0 -150vmax;
+    background: var(--color-text);
+    transform: scale(0);
+    animation: burst-disc 0.55s 0.12s cubic-bezier(0.55, 0, 0.2, 1) forwards;
+  }
+  .burst-ring {
+    width: 48px;
+    height: 48px;
+    margin: -24px 0 0 -24px;
+    border: 3px solid var(--color-ok);
+    animation: burst-ring 0.6s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+  }
+  .burst-ring + .burst-ring {
+    animation-delay: 0.1s;
+  }
+  .burst-spark {
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    background: var(--color-ok);
+    animation: burst-spark 0.55s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+  }
+  @keyframes burst-disc {
     to {
+      transform: scale(1);
+    }
+  }
+  @keyframes burst-ring {
+    from {
+      transform: scale(0.4);
+      opacity: 1;
+    }
+    to {
+      transform: scale(9);
       opacity: 0;
-      transform: scale(1.15);
+    }
+  }
+  @keyframes burst-spark {
+    from {
+      transform: rotate(var(--a)) translateX(20px) scale(1);
+    }
+    to {
+      transform: rotate(var(--a)) translateX(var(--d)) scale(0);
     }
   }
 
@@ -161,6 +240,7 @@ if (Astro.request.method === 'POST') {
   const boxes = [...document.querySelectorAll<HTMLSpanElement>('.pin-box')];
   const lock = document.querySelector<SVGSVGElement>('#lock')!;
   const errorText = document.querySelector<HTMLParagraphElement>('#error')!;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let busy = false;
 
   function paint() {
@@ -184,14 +264,34 @@ if (Astro.request.method === 'POST') {
       const data = (await response.json()) as { ok: boolean; next?: string; error?: string };
       if (data.ok) {
         pin.classList.add('is-ok');
-        lock.classList.add('is-open', 'is-leaving');
-        setTimeout(() => location.assign(data.next ?? '/'), 750);
+        lock.classList.add('is-open');
+        // Primero se abre el candado, después estalla y tapa la pantalla; la herramienta aparece con la
+        // transición entre páginas (public/transitions.js). Sin View Transitions queda la explosión y la carga normal.
+        const next = data.next ?? '/';
+        if (reducedMotion.matches) {
+          setTimeout(() => location.assign(next), 400);
+        } else {
+          setTimeout(explode, 520);
+          setTimeout(() => location.assign(next), 1200);
+        }
         return;
       }
       fail(data.error ?? 'Clave incorrecta.');
     } catch {
       fail('Sin conexión. Intenta de nuevo.');
     }
+  }
+
+  function explode() {
+    const burst = document.querySelector<HTMLDivElement>('#burst')!;
+    const r = lock.getBoundingClientRect();
+    burst.style.setProperty('--x', `${r.left + r.width / 2}px`);
+    burst.style.setProperty('--y', `${r.top + r.height / 2}px`);
+    burst.querySelectorAll<HTMLSpanElement>('.burst-spark').forEach((spark, i, all) => {
+      spark.style.setProperty('--a', `${(360 / all.length) * i + Math.random() * 20}deg`);
+      spark.style.setProperty('--d', `${140 + Math.random() * 110}px`);
+    });
+    burst.classList.add('is-on');
   }
 
   function fail(message: string) {

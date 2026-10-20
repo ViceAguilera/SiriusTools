@@ -39,6 +39,10 @@
       flex-direction: column;
       align-items: stretch;
     }
+    /* La entrada no tiene barra: si subiera igual, en pantallas bajas taparía las cajas de la clave. */
+    body:not(:has(.rail)) .cookie-notice {
+      bottom: calc(16px + env(safe-area-inset-bottom));
+    }
   }
 </style>
 
